@@ -5,10 +5,10 @@ import { useDesignStore } from '../../store/useDesignStore'
 import { computeSnappedPosition } from '../../utils/snapping'
 
 interface PanelTransformGizmoProps {
-  selectedMesh: THREE.Mesh | null
+  selectedObject: THREE.Object3D | null
 }
 
-export function PanelTransformGizmo({ selectedMesh }: PanelTransformGizmoProps) {
+export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps) {
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const panels = useDesignStore((s) => s.panels)
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
@@ -19,15 +19,15 @@ export function PanelTransformGizmo({ selectedMesh }: PanelTransformGizmoProps) 
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
 
   const handleObjectChange = useCallback(() => {
-    if (!selectedMesh || !selectedPanel) return
+    if (!selectedObject || !selectedPanel) return
     const state = useDesignStore.getState()
     if (!state.isDraggingGizmo) return
 
     const otherPanels = state.panels.filter((p) => p.id !== selectedPanel.id)
     const proposed: [number, number, number] = [
-      selectedMesh.position.x,
-      selectedMesh.position.y,
-      selectedMesh.position.z,
+      selectedObject.position.x,
+      selectedObject.position.y,
+      selectedObject.position.z,
     ]
 
     const { position, feedback } = computeSnappedPosition(
@@ -37,15 +37,15 @@ export function PanelTransformGizmo({ selectedMesh }: PanelTransformGizmoProps) 
       snappingEnabled
     )
 
-    selectedMesh.position.set(position[0], position[1], position[2])
+    selectedObject.position.set(position[0], position[1], position[2])
     movePanelLive(selectedPanel.id, position, feedback)
-  }, [selectedMesh, selectedPanel, snappingEnabled, movePanelLive])
+  }, [selectedObject, selectedPanel, snappingEnabled, movePanelLive])
 
-  if (!selectedMesh || !selectedPanel) return null
+  if (!selectedObject || !selectedPanel) return null
 
   return (
     <TransformControls
-      object={selectedMesh}
+      object={selectedObject}
       mode="translate"
       size={1.15}
       onMouseDown={beginTransformDrag}

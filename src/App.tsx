@@ -1,11 +1,11 @@
-import { SlidersHorizontal } from 'lucide-react'
+import { AlignVerticalSpaceAround, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { DesignsModal } from './components/layout/DesignsModal'
-import { PartsSidebar } from './components/layout/PartsSidebar'
-import { PropertiesPanel } from './components/layout/PropertiesPanel'
-import { TopToolbar } from './components/layout/TopToolbar'
-import { SceneCanvas } from './components/viewport/SceneCanvas'
-import { ViewportOverlay } from './components/viewport/ViewportOverlay'
+import { SceneCanvas } from './components/canvas/SceneCanvas'
+import { ViewportOverlay } from './components/canvas/ViewportOverlay'
+import { DesignsModal } from './components/ui/DesignsModal'
+import { PartsSidebar } from './components/ui/PartsSidebar'
+import { PropertiesPanel } from './components/ui/PropertiesPanel'
+import { TopToolbar } from './components/ui/TopToolbar'
 import { useDesignStore } from './store/useDesignStore'
 
 export function App() {
@@ -14,11 +14,13 @@ export function App() {
   const [propsDrawerOpen, setPropsDrawerOpen] = useState(false)
 
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
+  const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const panels = useDesignStore((s) => s.panels)
   const undo = useDesignStore((s) => s.undo)
   const redo = useDesignStore((s) => s.redo)
-  const deletePanel = useDesignStore((s) => s.deletePanel)
+  const deleteSelectedPanels = useDesignStore((s) => s.deleteSelectedPanels)
   const selectPanel = useDesignStore((s) => s.selectPanel)
+  const autoDistributeSelected = useDesignStore((s) => s.autoDistributeSelected)
 
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
 
@@ -51,16 +53,16 @@ export function App() {
         return
       }
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPanelId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPanelIds.length > 0) {
         e.preventDefault()
-        deletePanel(selectedPanelId)
+        deleteSelectedPanels()
         return
       }
 
       if (e.key === 'Escape') {
         if (designsModalOpen) {
           setDesignsModalOpen(false)
-        } else if (selectedPanelId) {
+        } else if (selectedPanelIds.length > 0) {
           selectPanel(null)
         }
       }
@@ -68,7 +70,7 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, deletePanel, selectPanel, selectedPanelId, designsModalOpen])
+  }, [undo, redo, deleteSelectedPanels, selectPanel, selectedPanelIds, designsModalOpen])
 
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
@@ -87,7 +89,7 @@ export function App() {
       />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* القائمة اليمنى: إضافة الألواح (ثابتة على الشاشات الكبيرة) */}
+        {/* القائمة اليمنى: مكتبة الأجزاء (ثابتة على الشاشات الكبيرة) */}
         <div className="hidden h-full w-72 shrink-0 lg:block xl:w-80">
           <PartsSidebar />
         </div>
@@ -97,8 +99,29 @@ export function App() {
           <SceneCanvas />
           <ViewportOverlay />
 
-          {/* زر عائم مريح للتابلت عند تحديد لوح لفتح الخصائص بلمسة */}
-          {selectedPanel && !propsDrawerOpen && (
+          {/* أزرار عائمة مريحة للتابلت عند التحديد */}
+          {selectedPanelIds.length >= 2 && !propsDrawerOpen && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2 px-4 lg:hidden">
+              <button
+                type="button"
+                onClick={() => autoDistributeSelected()}
+                className="pointer-events-auto flex h-12 items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-xs font-bold text-slate-950 shadow-xl transition active:scale-95"
+              >
+                <AlignVerticalSpaceAround className="h-4 w-4" />
+                <span>توزيع متساوي ({selectedPanelIds.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPropsDrawerOpen(true)}
+                className="pointer-events-auto flex h-12 items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-4 text-xs font-bold text-slate-100 shadow-xl backdrop-blur-md transition active:scale-95"
+              >
+                <SlidersHorizontal className="h-4 w-4 text-amber-400" />
+                <span>خيارات</span>
+              </button>
+            </div>
+          )}
+
+          {selectedPanelIds.length === 1 && selectedPanel && !propsDrawerOpen && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4 lg:hidden">
               <button
                 type="button"
@@ -112,12 +135,12 @@ export function App() {
           )}
         </main>
 
-        {/* القائمة اليسرى: خصائص اللوح المحدد (ثابتة على الشاشات الكبيرة) */}
+        {/* القائمة اليسرى: خصائص العنصر المحدد (ثابتة على الشاشات الكبيرة) */}
         <div className="hidden h-full w-72 shrink-0 lg:block xl:w-80">
           <PropertiesPanel />
         </div>
 
-        {/* درج الألواح للتابلت والموبايل */}
+        {/* درج الأجزاء للتابلت والموبايل */}
         {partsDrawerOpen && (
           <div className="fixed inset-0 z-40 flex lg:hidden">
             <div

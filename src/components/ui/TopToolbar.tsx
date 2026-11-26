@@ -1,10 +1,15 @@
 import {
   Box,
   Compass,
+  DoorClosed,
+  DoorOpen,
+  Eye,
+  EyeOff,
   FolderOpen,
   Layers,
   Magnet,
   Redo2,
+  Ruler,
   Save,
   SlidersHorizontal,
   Undo2,
@@ -42,14 +47,23 @@ export function TopToolbar({
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
   const setSnappingEnabled = useDesignStore((s) => s.setSnappingEnabled)
 
+  const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
+  const toggleInterfacesOpen = useDesignStore((s) => s.toggleInterfacesOpen)
+
+  const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
+  const toggleInterfacesHidden = useDesignStore((s) => s.toggleInterfacesHidden)
+
+  const showDimensions = useDesignStore((s) => s.showDimensions)
+  const toggleShowDimensions = useDesignStore((s) => s.toggleShowDimensions)
+
   const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const setCameraPreset = useDesignStore((s) => s.setCameraPreset)
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
-  const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
+  const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
 
   return (
     <header className="z-30 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-900/95 px-3 py-2 backdrop-blur-md">
-      {/* الشعار واسم التصميم + أزرار القوائم للشاشات المتوسطة والصغيرة */}
+      {/* الشعار واسم التصميم + زر قائمة الألواح للشاشات المتوسطة والصغيرة */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -62,7 +76,7 @@ export function TopToolbar({
           title="الأجزاء والقطع"
         >
           <Layers className="h-4 w-4" />
-          <span className="hidden sm:inline">الألواح</span>
+          <span className="hidden sm:inline">الأجزاء</span>
         </button>
 
         <div className="flex items-center gap-2.5">
@@ -73,19 +87,18 @@ export function TopToolbar({
             <h1 className="text-sm font-bold text-slate-100 sm:text-base">
               مصمم أثاث الكونتر 3D
             </h1>
-            <p className="max-w-[140px] truncate text-xs text-slate-400 sm:max-w-[220px]">
+            <p className="max-w-[140px] truncate text-xs text-slate-400 sm:max-w-[200px]">
               {currentDesignName}
             </p>
           </div>
         </div>
       </div>
 
-      {/* أزرار الكاميرا السريعة */}
-      <div className="order-3 flex w-full items-center justify-between gap-2 pt-1 sm:order-2 sm:w-auto sm:justify-center sm:pt-0">
+      {/* أزرار الكاميرا + أدوات المرحلة الثانية (الواجهات، المقاسات، المغناطيس) */}
+      <div className="order-3 flex w-full flex-wrap items-center justify-center gap-1.5 pt-1 xl:order-2 xl:w-auto xl:pt-0">
         <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
           <span className="hidden items-center gap-1 px-2 text-xs text-slate-400 md:flex">
             <Compass className="h-3.5 w-3.5" />
-            المنظور
           </span>
           {CAMERA_BUTTONS.map((btn) => {
             const active = cameraPreset === btn.preset
@@ -94,7 +107,7 @@ export function TopToolbar({
                 key={btn.preset}
                 type="button"
                 onClick={() => setCameraPreset(btn.preset)}
-                className={`h-9 min-w-[48px] rounded-lg px-2.5 text-xs font-bold transition sm:text-sm ${
+                className={`h-9 min-w-[44px] rounded-lg px-2.5 text-xs font-bold transition ${
                   active
                     ? 'bg-amber-500 text-slate-950 shadow-sm'
                     : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -106,11 +119,68 @@ export function TopToolbar({
           })}
         </div>
 
+        {/* فتح / إغلاق الضلف والأدراج */}
+        <button
+          type="button"
+          onClick={toggleInterfacesOpen}
+          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+            interfacesOpen
+              ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
+              : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="فتح أو إغلاق الضلف والأدراج لمعاينة الداخل"
+        >
+          {interfacesOpen ? (
+            <DoorOpen className="h-4 w-4 text-amber-400" />
+          ) : (
+            <DoorClosed className="h-4 w-4 text-slate-400" />
+          )}
+          <span className="hidden sm:inline">
+            {interfacesOpen ? 'إغلاق الواجهات' : 'فتح الواجهات'}
+          </span>
+        </button>
+
+        {/* إخفاء الضلف والأدراج مؤقتاً */}
+        <button
+          type="button"
+          onClick={toggleInterfacesHidden}
+          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+            interfacesHidden
+              ? 'border-violet-500/60 bg-violet-500/20 text-violet-200'
+              : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="إخفاء الضلف والأدراج مؤقتاً لتعديل الأرفف الداخلية"
+        >
+          {interfacesHidden ? (
+            <EyeOff className="h-4 w-4 text-violet-300" />
+          ) : (
+            <Eye className="h-4 w-4 text-slate-400" />
+          )}
+          <span className="hidden md:inline">
+            {interfacesHidden ? 'إظهار الضلف' : 'إخفاء الضلف'}
+          </span>
+        </button>
+
+        {/* إظهار / إخفاء المقاسات 3D */}
+        <button
+          type="button"
+          onClick={toggleShowDimensions}
+          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+            showDimensions
+              ? 'border-sky-500/60 bg-sky-500/15 text-sky-200'
+              : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
+          }`}
+          title="إظهار أو إخفاء خطوط المقاسات ثلاثية الأبعاد"
+        >
+          <Ruler className="h-4 w-4" />
+          <span className="hidden sm:inline">المقاسات</span>
+        </button>
+
         {/* زر المغناطيس الذكي */}
         <button
           type="button"
           onClick={() => setSnappingEnabled(!snappingEnabled)}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition sm:text-sm ${
+          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
             snappingEnabled
               ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
               : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
@@ -118,12 +188,12 @@ export function TopToolbar({
           title="تفعيل أو إيقاف المغناطيس الذكي (0.5 سم + التصاق بالأسطح)"
         >
           <Magnet className="h-4 w-4" />
-          <span>المغناطيس</span>
+          <span className="hidden sm:inline">المغناطيس</span>
         </button>
       </div>
 
       {/* التراجع والإعادة والحفظ */}
-      <div className="order-2 flex items-center gap-1.5 sm:order-3">
+      <div className="order-2 flex items-center gap-1.5 xl:order-3">
         <button
           type="button"
           onClick={undo}
@@ -163,10 +233,10 @@ export function TopToolbar({
               ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
               : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
           }`}
-          title="خصائص اللوح المحدد"
+          title="خصائص العنصر المحدد"
         >
           <SlidersHorizontal className="h-4 w-4" />
-          {selectedPanelId && (
+          {selectedPanelIds.length > 0 && (
             <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900" />
           )}
         </button>

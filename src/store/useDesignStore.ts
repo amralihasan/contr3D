@@ -1,10 +1,17 @@
 import * as THREE from 'three'
 import { create } from 'zustand'
-import { MAX_PANEL_DIM_CM, MIN_PANEL_DIM_CM, PANEL_PRESETS } from '../constants/presets'
+import {
+  ALL_PRESETS,
+  MAX_CLEARANCE_CM,
+  MAX_PANEL_DIM_CM,
+  MIN_CLEARANCE_CM,
+  MIN_PANEL_DIM_CM,
+} from '../constants/presets'
 import type {
   Axis,
   CameraPreset,
   FurniturePanel,
+  HingeSide,
   MaterialId,
   PanelDimensions,
   PanelRole,
@@ -12,6 +19,7 @@ import type {
   SnapFeedback,
   Vec3,
 } from '../types/furniture'
+import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
 import {
   deleteSavedDesign,
@@ -36,6 +44,11 @@ function clampDim(val: number): number {
   return roundTo(Math.min(MAX_PANEL_DIM_CM, Math.max(MIN_PANEL_DIM_CM, val)), 2)
 }
 
+function clampClearance(val: number): number {
+  if (!Number.isFinite(val)) return 0.2
+  return roundTo(Math.min(MAX_CLEARANCE_CM, Math.max(MIN_CLEARANCE_CM, val)), 2)
+}
+
 function createStarterPanels(): FurniturePanel[] {
   // وحدة كونتر نموذجية جاهزة (عرض 100 × ارتفاع 81.8 × عمق 40 سم)
   return [
@@ -43,6 +56,7 @@ function createStarterPanels(): FurniturePanel[] {
       id: 'starter_left',
       name: 'جنب أيسر',
       role: 'vertical',
+      category: 'panel',
       dimensions: { width: 1.8, height: 80, depth: 40 },
       position: [-49.1, 40, 0],
       rotation: [0, 0, 0],
@@ -53,6 +67,7 @@ function createStarterPanels(): FurniturePanel[] {
       id: 'starter_right',
       name: 'جنب أيمن',
       role: 'vertical',
+      category: 'panel',
       dimensions: { width: 1.8, height: 80, depth: 40 },
       position: [49.1, 40, 0],
       rotation: [0, 0, 0],
@@ -63,6 +78,7 @@ function createStarterPanels(): FurniturePanel[] {
       id: 'starter_top',
       name: 'قرصة علوية',
       role: 'horizontal',
+      category: 'panel',
       dimensions: { width: 100, height: 1.8, depth: 40 },
       position: [0, 80.9, 0],
       rotation: [0, 0, 0],
@@ -73,6 +89,7 @@ function createStarterPanels(): FurniturePanel[] {
       id: 'starter_shelf',
       name: 'رف داخلي 1',
       role: 'shelf',
+      category: 'panel',
       dimensions: { width: 96.4, height: 1.8, depth: 38 },
       position: [0, 40, 0.7],
       rotation: [0, 0, 0],
@@ -83,6 +100,7 @@ function createStarterPanels(): FurniturePanel[] {
       id: 'starter_back',
       name: 'ضهر',
       role: 'back',
+      category: 'panel',
       dimensions: { width: 100, height: 80, depth: 0.6 },
       position: [0, 40, -20.3],
       rotation: [0, 0, 0],
@@ -131,9 +149,18 @@ const initial = getInitialData()
 interface DesignState {
   panels: FurniturePanel[]
   selectedPanelId: string | null
+  selectedPanelIds: string[]
+  multiSelectMode: boolean
+
   snappingEnabled: boolean
   isDraggingGizmo: boolean
   snapFeedback: SnapFeedback
+
+  // المرحلة الثانية: تحريك وإخفاء الواجهات + خطوط المقاسات + إشعار التوزيع
+  interfacesOpen: boolean
+  interfacesHidden: boolean
+  showDimensions: boolean
+  statusToast: string | null
 
   cameraPreset: CameraPreset
   cameraRequestTick: number
@@ -147,20 +174,39 @@ interface DesignState {
   savedDesigns: SavedDesign[]
   lastSavedAt: number | null
 
-  // Actions
-  selectPanel: (id: string | null) => void
+  // Selection actions
+  selectPanel: (id: string | null, additive?: boolean) => void
+  togglePanelSelection: (id: string) => void
+  setMultiSelectMode: (enabled: boolean) => void
+  selectAllByRole: (roles: PanelRole[]) => void
+  clearSelection: () => void
+
+  // Workspace view & toggles
   setSnappingEnabled: (enabled: boolean) => void
   setCameraPreset: (preset: CameraPreset) => void
+  toggleInterfacesOpen: () => void
+  toggleInterfacesHidden: () => void
+  toggleShowDimensions: () => void
+  clearStatusToast: () => void
 
+  // Panel CRUD
   addPresetPanel: (role: Exclude<PanelRole, 'custom'>) => void
   duplicatePanel: (id: string) => void
   deletePanel: (id: string) => void
+  deleteSelectedPanels: () => void
 
+  // Panel properties
   updatePanelDimension: (id: string, key: keyof PanelDimensions, value: number) => void
   setPanelThickness: (id: string, thicknessCm: number) => void
+  setPanelClearance: (id: string, clearanceCm: number) => void
+  setPanelHasHandle: (id: string, hasHandle: boolean) => void
+  setPanelHingeSide: (id: string, side: HingeSide) => void
   rotatePanel90: (id: string, axis: Axis) => void
   setPanelMaterial: (id: string, materialId: MaterialId) => void
   renamePanel: (id: string, name: string) => void
+
+  // Phase 2: Auto-distribute shelves/dividers
+  autoDistributeSelected: (axisOverride?: DistributeAxis) => void
 
   // Gizmo transform lifecycle
   beginTransformDrag: () => void
@@ -190,9 +236,17 @@ function pushPast(past: FurniturePanel[][], snapshot: FurniturePanel[]): Furnitu
 export const useDesignStore = create<DesignState>((set, get) => ({
   panels: initial.panels,
   selectedPanelId: null,
+  selectedPanelIds: [],
+  multiSelectMode: false,
+
   snappingEnabled: true,
   isDraggingGizmo: false,
   snapFeedback: { x: false, y: false, z: false, floor: false },
+
+  interfacesOpen: false,
+  interfacesHidden: false,
+  showDimensions: true,
+  statusToast: null,
 
   cameraPreset: 'perspective',
   cameraRequestTick: 0,
@@ -206,7 +260,52 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   savedDesigns: loadSavedDesigns(),
   lastSavedAt: null,
 
-  selectPanel: (id) => set({ selectedPanelId: id }),
+  selectPanel: (id, additive = false) => {
+    if (!id) {
+      set({ selectedPanelId: null, selectedPanelIds: [] })
+      return
+    }
+    const { multiSelectMode, selectedPanelIds } = get()
+    if (additive || multiSelectMode) {
+      const exists = selectedPanelIds.includes(id)
+      const nextIds = exists
+        ? selectedPanelIds.filter((x) => x !== id)
+        : [...selectedPanelIds, id]
+      set({
+        selectedPanelIds: nextIds,
+        selectedPanelId: nextIds[nextIds.length - 1] ?? null,
+      })
+      return
+    }
+    set({ selectedPanelId: id, selectedPanelIds: [id] })
+  },
+
+  togglePanelSelection: (id) => {
+    const { selectedPanelIds } = get()
+    const exists = selectedPanelIds.includes(id)
+    const nextIds = exists
+      ? selectedPanelIds.filter((x) => x !== id)
+      : [...selectedPanelIds, id]
+    set({
+      selectedPanelIds: nextIds,
+      selectedPanelId: nextIds[nextIds.length - 1] ?? null,
+    })
+  },
+
+  setMultiSelectMode: (enabled) => set({ multiSelectMode: enabled }),
+
+  selectAllByRole: (roles) => {
+    const matching = get()
+      .panels.filter((p) => roles.includes(p.role))
+      .map((p) => p.id)
+    set({
+      selectedPanelIds: matching,
+      selectedPanelId: matching[matching.length - 1] ?? null,
+      multiSelectMode: matching.length > 1,
+    })
+  },
+
+  clearSelection: () => set({ selectedPanelId: null, selectedPanelIds: [] }),
 
   setSnappingEnabled: (enabled) => set({ snappingEnabled: enabled }),
 
@@ -216,28 +315,56 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       cameraRequestTick: state.cameraRequestTick + 1,
     })),
 
+  toggleInterfacesOpen: () =>
+    set((state) => ({ interfacesOpen: !state.interfacesOpen })),
+
+  toggleInterfacesHidden: () =>
+    set((state) => ({ interfacesHidden: !state.interfacesHidden })),
+
+  toggleShowDimensions: () =>
+    set((state) => ({ showDimensions: !state.showDimensions })),
+
+  clearStatusToast: () => set({ statusToast: null }),
+
   addPresetPanel: (role) => {
-    const preset = PANEL_PRESETS.find((p) => p.role === role)
+    const preset = ALL_PRESETS.find((p) => p.role === role)
     if (!preset) return
 
     const { panels, past } = get()
     const countOfRole = panels.filter((p) => p.role === role).length + 1
     const [, hy] = getWorldHalfExtents(preset.dimensions, [0, 0, 0])
 
-    // إزاحة بسيطة إذا كان هناك ألواح بالفعل لتفادي التطابق التام في المنتصف
-    const offsetStep = (panels.length % 4) * 8
-    const baseZ = role === 'back' ? -25 : offsetStep
-    const baseY = role === 'horizontal' && panels.length === 0 ? 40 : hy
+    let position: Vec3
+    if (preset.defaultPosition) {
+      const sameRoleCount = panels.filter((p) => p.role === role).length
+      const shiftX = role === 'hinged_door' && sameRoleCount % 2 === 1 ? -25 : 0
+      const shiftY = role === 'drawer' ? sameRoleCount * 21 : 0
+      const shiftXSliding = role === 'sliding_door' && sameRoleCount % 2 === 1 ? 24 : 0
+      position = [
+        roundTo(preset.defaultPosition[0] + shiftX + shiftXSliding, 2),
+        roundTo(Math.max(hy, preset.defaultPosition[1] + shiftY), 2),
+        preset.defaultPosition[2],
+      ]
+    } else {
+      const offsetStep = (panels.length % 4) * 8
+      const baseZ = role === 'back' ? -25 : offsetStep
+      const baseY = role === 'horizontal' && panels.length === 0 ? 40 : hy
+      position = [offsetStep, roundTo(baseY, 2), baseZ]
+    }
 
     const newPanel: FurniturePanel = {
       id: createId(),
       name: `${preset.shortLabel} ${countOfRole}`,
       role: preset.role,
+      category: preset.category,
       dimensions: { ...preset.dimensions },
-      position: [offsetStep, roundTo(baseY, 2), baseZ],
+      position,
       rotation: [0, 0, 0],
       thicknessAxis: preset.thicknessAxis,
       materialId: preset.defaultMaterial,
+      ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
+      ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
+      ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
     }
 
     const nextPanels = [...panels, newPanel]
@@ -246,6 +373,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       panels: nextPanels,
       selectedPanelId: newPanel.id,
+      selectedPanelIds: [newPanel.id],
+      interfacesHidden: preset.category === 'front' ? false : get().interfacesHidden,
       past: pushPast(past, panels),
       future: [],
     })
@@ -272,21 +401,40 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       panels: nextPanels,
       selectedPanelId: copy.id,
+      selectedPanelIds: [copy.id],
       past: pushPast(past, panels),
       future: [],
     })
   },
 
   deletePanel: (id) => {
-    const { panels, past, selectedPanelId } = get()
+    const { panels, past, selectedPanelIds } = get()
     if (!panels.some((p) => p.id === id)) return
 
     const nextPanels = panels.filter((p) => p.id !== id)
+    const nextSelectedIds = selectedPanelIds.filter((x) => x !== id)
     saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
 
     set({
       panels: nextPanels,
-      selectedPanelId: selectedPanelId === id ? null : selectedPanelId,
+      selectedPanelIds: nextSelectedIds,
+      selectedPanelId: nextSelectedIds[nextSelectedIds.length - 1] ?? null,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
+  deleteSelectedPanels: () => {
+    const { panels, past, selectedPanelIds } = get()
+    if (selectedPanelIds.length === 0) return
+
+    const nextPanels = panels.filter((p) => !selectedPanelIds.includes(p.id))
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      selectedPanelIds: [],
+      selectedPanelId: null,
       past: pushPast(past, panels),
       future: [],
     })
@@ -356,6 +504,60 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     })
   },
 
+  setPanelClearance: (id, clearanceCm) => {
+    const { panels, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const clamped = clampClearance(clearanceCm)
+    if ((target.clearanceCm ?? 0.2) === clamped) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, clearanceCm: clamped } : p
+    )
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
+  setPanelHasHandle: (id, hasHandle) => {
+    const { panels, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, hasHandle } : p
+    )
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
+  setPanelHingeSide: (id, side) => {
+    const { panels, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, hingeSide: side } : p
+    )
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
   rotatePanel90: (id, axis) => {
     const { panels, past } = get()
     const target = panels.find((p) => p.id === id)
@@ -410,6 +612,24 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     })
   },
 
+  autoDistributeSelected: (axisOverride) => {
+    const { panels, selectedPanelIds, past } = get()
+    const result = computeAutoDistribution(panels, selectedPanelIds, axisOverride)
+
+    if (!result.applied) {
+      set({ statusToast: result.message })
+      return
+    }
+
+    saveAutosave(result.panels, get().currentDesignName, get().currentDesignId)
+    set({
+      panels: result.panels,
+      past: pushPast(past, panels),
+      future: [],
+      statusToast: result.message,
+    })
+  },
+
   beginTransformDrag: () => {
     const { panels } = get()
     set({
@@ -445,13 +665,15 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   },
 
   undo: () => {
-    const { past, panels, future, selectedPanelId } = get()
+    const { past, panels, future, selectedPanelIds } = get()
     if (past.length === 0) return
 
     const previous = past[past.length - 1]
     const nextPast = past.slice(0, past.length - 1)
     const nextFuture = [clonePanels(panels), ...future].slice(0, MAX_HISTORY)
-    const stillSelected = previous.some((p) => p.id === selectedPanelId)
+    const nextSelectedIds = selectedPanelIds.filter((id) =>
+      previous.some((p) => p.id === id)
+    )
 
     saveAutosave(previous, get().currentDesignName, get().currentDesignId)
 
@@ -459,18 +681,21 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       panels: clonePanels(previous),
       past: nextPast,
       future: nextFuture,
-      selectedPanelId: stillSelected ? selectedPanelId : null,
+      selectedPanelIds: nextSelectedIds,
+      selectedPanelId: nextSelectedIds[nextSelectedIds.length - 1] ?? null,
     })
   },
 
   redo: () => {
-    const { past, panels, future, selectedPanelId } = get()
+    const { past, panels, future, selectedPanelIds } = get()
     if (future.length === 0) return
 
     const next = future[0]
     const nextFuture = future.slice(1)
     const nextPast = pushPast(past, panels)
-    const stillSelected = next.some((p) => p.id === selectedPanelId)
+    const nextSelectedIds = selectedPanelIds.filter((id) =>
+      next.some((p) => p.id === id)
+    )
 
     saveAutosave(next, get().currentDesignName, get().currentDesignId)
 
@@ -478,7 +703,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       panels: clonePanels(next),
       past: nextPast,
       future: nextFuture,
-      selectedPanelId: stillSelected ? selectedPanelId : null,
+      selectedPanelIds: nextSelectedIds,
+      selectedPanelId: nextSelectedIds[nextSelectedIds.length - 1] ?? null,
     })
   },
 
@@ -488,6 +714,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       panels: [],
       selectedPanelId: null,
+      selectedPanelIds: [],
       currentDesignId: null,
       currentDesignName: 'تصميم جديد',
       past: panels.length > 0 ? pushPast(past, panels) : past,
@@ -502,6 +729,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       panels: starter,
       selectedPanelId: null,
+      selectedPanelIds: [],
       currentDesignId: null,
       currentDesignName: 'وحدة كونتر أساسية',
       past: pushPast(past, panels),
@@ -537,6 +765,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       panels: loadedPanels,
       selectedPanelId: null,
+      selectedPanelIds: [],
       currentDesignId: found.id,
       currentDesignName: found.name,
       past: pushPast(past, panels),
