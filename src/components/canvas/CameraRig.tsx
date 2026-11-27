@@ -17,6 +17,7 @@ export function CameraRig() {
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
   const isDraggingHuman = useDesignStore((s) => s.isDraggingHuman)
+  const isResizingHandle = useDesignStore((s) => s.isResizingHandle)
 
   const animatingRef = useRef(false)
   const animElapsedRef = useRef(0)
@@ -77,7 +78,7 @@ export function CameraRig() {
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled={!isDraggingGizmo && !isDraggingTape && !isDraggingHuman}
+      enabled={!isDraggingGizmo && !isDraggingTape && !isDraggingHuman && !isResizingHandle}
       enableDamping
       dampingFactor={0.08}
       rotateSpeed={0.85}

@@ -125,7 +125,7 @@ export interface FurniturePanel {
 }
 
 export type ToolMode = 'select' | 'tape'
-
+export type TransformMode = 'move' | 'resize'
 export type TapeMode = 'guide' | 'measure'
 
 export type HumanScalePreset = 'adult' | 'child'

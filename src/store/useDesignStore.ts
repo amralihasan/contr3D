@@ -33,6 +33,7 @@ import {
   type SnapFeedback,
   type TapeMode,
   type ToolMode,
+  type TransformMode,
   type Vec3,
 } from '../types/furniture'
 import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
@@ -195,8 +196,10 @@ interface DesignState {
   clipboard: FurniturePanel[]
 
   toolMode: ToolMode
+  transformMode: TransformMode
   tapeMode: TapeMode
   isDraggingTape: boolean
+  isResizingHandle: boolean
   activeReferenceEdge: ReferenceEdge | null
   draftGuideDistanceCm: number
   draftGuideDirection: 1 | -1
@@ -241,6 +244,7 @@ interface DesignState {
 
   // Tape measure & Guide actions
   setToolMode: (mode: ToolMode) => void
+  setTransformMode: (mode: TransformMode) => void
   setTapeMode: (mode: TapeMode) => void
   setIsDraggingTape: (dragging: boolean) => void
   toggleGuidesVisible: () => void
@@ -313,6 +317,12 @@ interface DesignState {
   beginTransformDrag: () => void
   setSnapFeedback: (feedback: SnapFeedback) => void
   endTransformDrag: (finalMove?: { id: string; position: Vec3 }) => void
+  beginResizeDrag: () => void
+  endResizeDrag: (finalResize?: {
+    id: string
+    dimensions: PanelDimensions
+    position: Vec3
+  }) => void
 
   // History
   undo: () => void
@@ -409,8 +419,10 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   clipboard: [],
 
   toolMode: 'select',
+  transformMode: 'move',
   tapeMode: 'guide',
   isDraggingTape: false,
+  isResizingHandle: false,
   activeReferenceEdge: null,
   draftGuideDistanceCm: 30,
   draftGuideDirection: 1,
@@ -541,10 +553,22 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     set({
       toolMode: mode,
       isDraggingTape: false,
+      isResizingHandle: false,
       activeReferenceEdge: null,
       selectedGuideId: null,
       selectedPanelId: mode === 'tape' ? null : get().selectedPanelId,
       selectedPanelIds: mode === 'tape' ? [] : get().selectedPanelIds,
+    }),
+
+  setTransformMode: (mode) =>
+    set({
+      transformMode: mode,
+      isResizingHandle: false,
+      toolMode: 'select',
+      statusToast:
+        mode === 'resize'
+          ? 'وضع تمديد المقاس: اسحب أطراف اللوح لتغيير مقاسه'
+          : 'وضع التحريك (M)',
     }),
 
   setTapeMode: (mode) =>
@@ -1527,6 +1551,76 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       snapFeedback: { x: false, y: false, z: false, floor: false, guide: false },
       past: changed && dragSnapshot ? pushPast(past, dragSnapshot.panels, dragSnapshot.guides) : past,
       future: changed ? [] : get().future,
+    })
+  },
+
+  beginResizeDrag: () => {
+    const { panels, guides } = get()
+    set({
+      isResizingHandle: true,
+      dragSnapshot: cloneSnapshot(panels, guides),
+      snapFeedback: { x: false, y: false, z: false, floor: false, guide: false },
+    })
+  },
+
+  endResizeDrag: (finalResize) => {
+    const { dragSnapshot, panels, guides, past, currentDesignName, currentDesignId } = get()
+    const cleanFeedback: SnapFeedback = { x: false, y: false, z: false, floor: false, guide: false }
+
+    if (!finalResize) {
+      set({
+        isResizingHandle: false,
+        dragSnapshot: null,
+        snapFeedback: cleanFeedback,
+      })
+      return
+    }
+
+    const prevPanel = panels.find((p) => p.id === finalResize.id)
+    if (!prevPanel) {
+      set({
+        isResizingHandle: false,
+        dragSnapshot: null,
+        snapFeedback: cleanFeedback,
+      })
+      return
+    }
+
+    const changed =
+      Math.abs(prevPanel.dimensions.width - finalResize.dimensions.width) > 0.001 ||
+      Math.abs(prevPanel.dimensions.height - finalResize.dimensions.height) > 0.001 ||
+      Math.abs(prevPanel.dimensions.depth - finalResize.dimensions.depth) > 0.001 ||
+      Math.abs(prevPanel.position[0] - finalResize.position[0]) > 0.001 ||
+      Math.abs(prevPanel.position[1] - finalResize.position[1]) > 0.001 ||
+      Math.abs(prevPanel.position[2] - finalResize.position[2]) > 0.001
+
+    if (!changed) {
+      set({
+        isResizingHandle: false,
+        dragSnapshot: null,
+        snapFeedback: cleanFeedback,
+      })
+      return
+    }
+
+    const nextPanels = panels.map((p) =>
+      p.id === finalResize.id
+        ? {
+            ...p,
+            dimensions: { ...finalResize.dimensions },
+            position: [...finalResize.position] as Vec3,
+          }
+        : p
+    )
+    saveAutosave(nextPanels, guides, currentDesignName, currentDesignId)
+
+    set({
+      panels: nextPanels,
+      isResizingHandle: false,
+      dragSnapshot: null,
+      snapFeedback: cleanFeedback,
+      past: dragSnapshot ? pushPast(past, dragSnapshot.panels, dragSnapshot.guides) : past,
+      future: [],
     })
   },
 

@@ -52,6 +52,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const selectGuide = useDesignStore((s) => s.selectGuide)
   const selectPanel = useDesignStore((s) => s.selectPanel)
   const setToolMode = useDesignStore((s) => s.setToolMode)
+  const setTransformMode = useDesignStore((s) => s.setTransformMode)
   const setActiveReferenceEdge = useDesignStore((s) => s.setActiveReferenceEdge)
   const autoDistributeSelected = useDesignStore((s) => s.autoDistributeSelected)
 
@@ -74,6 +75,19 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
         e.preventDefault()
         toggleFocusMode()
         return
+      }
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.code === 'KeyM' || e.key.toLowerCase() === 'm') {
+          e.preventDefault()
+          setTransformMode('move')
+          return
+        }
+        if (e.code === 'KeyR' || e.key.toLowerCase() === 'r') {
+          e.preventDefault()
+          setTransformMode('resize')
+          return
+        }
       }
 
       const mod = e.ctrlKey || e.metaKey
@@ -174,6 +188,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     selectGuide,
     selectPanel,
     setToolMode,
+    setTransformMode,
     setActiveReferenceEdge,
     toggleFocusMode,
     selectedPanelIds,

@@ -11,6 +11,7 @@ import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
 import { HumanReference } from './HumanReference'
+import { PanelResizeHandles } from './PanelResizeHandles'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
 import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
@@ -239,6 +240,7 @@ export function SceneCanvas() {
   const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
+  const isResizingHandle = useDesignStore((s) => s.isResizingHandle)
   const toolMode = useDesignStore((s) => s.toolMode)
   const selectPanel = useDesignStore((s) => s.selectPanel)
   const selectGuide = useDesignStore((s) => s.selectGuide)
@@ -343,7 +345,7 @@ export function SceneCanvas() {
           }
         }}
         onPointerMissed={() => {
-          if (!isDraggingGizmo && !isDraggingTape && toolMode === 'select') {
+          if (!isDraggingGizmo && !isDraggingTape && !isResizingHandle && toolMode === 'select') {
             selectPanel(null)
           } else if (toolMode === 'tape') {
             selectGuide(null)
@@ -369,6 +371,7 @@ export function SceneCanvas() {
         <TapeMeasureTool objectMap={objectMap} handlersRef={tapeHandlersRef} />
         <DimensionsOverlay3D />
         <PanelTransformGizmo selectedObject={selectedObject} />
+        <PanelResizeHandles selectedObject={selectedObject} />
         <ExportCaptureController />
       </Canvas>
     </div>

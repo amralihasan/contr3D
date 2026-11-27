@@ -4,6 +4,8 @@ import {
   ClipboardPaste,
   Copy,
   CopyPlus,
+  Maximize2,
+  Move,
   Scissors,
   Trash2,
   X,
@@ -23,6 +25,8 @@ export function QuickActionMenu({
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const clipboardCount = useDesignStore((s) => s.clipboard.length)
   const toolMode = useDesignStore((s) => s.toolMode)
+  const transformMode = useDesignStore((s) => s.transformMode)
+  const setTransformMode = useDesignStore((s) => s.setTransformMode)
   const activeReferenceEdge = useDesignStore((s) => s.activeReferenceEdge)
   const selectedGuideId = useDesignStore((s) => s.selectedGuideId)
 
@@ -278,6 +282,36 @@ export function QuickActionMenu({
             {selectedPanelIds.length} محدد
           </span>
         )}
+
+        {/* التبديل بين وضع التحريك ووضع تمديد المقاس */}
+        <div className="flex items-center gap-0.5 rounded-xl border border-slate-700/80 bg-slate-950/70 p-0.5 sm:rounded-full">
+          <button
+            type="button"
+            onClick={() => setTransformMode('move')}
+            className={`flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-bold transition sm:rounded-full ${
+              transformMode === 'move'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+            title="تحريك العنصر بالأسهم (M)"
+          >
+            <Move className="h-3.5 w-3.5" />
+            <span>تحريك</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTransformMode('resize')}
+            className={`flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-bold transition sm:rounded-full ${
+              transformMode === 'resize'
+                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+            title="سحب أطراف اللوح لتمديد المقاس (R)"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+            <span>تمديد المقاس</span>
+          </button>
+        </div>
 
         <button
           type="button"
