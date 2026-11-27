@@ -39,6 +39,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
 export interface UiPreferences {
   partsSidebarOpen: boolean
   propsSidebarOpen: boolean
+  autoSaveEnabled: boolean
 }
 
 export function deepClone<T>(value: T): T {
@@ -253,10 +254,12 @@ export function sanitizeGuides(raw: unknown): GuideLine[] {
 export function loadUiPreferences(): UiPreferences {
   try {
     const raw = safeGetLocalItem(UI_PREFS_STORAGE_KEY)
-    if (!raw) return { partsSidebarOpen: true, propsSidebarOpen: false }
+    if (!raw) {
+      return { partsSidebarOpen: true, propsSidebarOpen: false, autoSaveEnabled: true }
+    }
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') {
-      return { partsSidebarOpen: true, propsSidebarOpen: false }
+      return { partsSidebarOpen: true, propsSidebarOpen: false, autoSaveEnabled: true }
     }
     const obj = parsed as Record<string, unknown>
     return {
@@ -264,14 +267,17 @@ export function loadUiPreferences(): UiPreferences {
         typeof obj.partsSidebarOpen === 'boolean' ? obj.partsSidebarOpen : true,
       propsSidebarOpen:
         typeof obj.propsSidebarOpen === 'boolean' ? obj.propsSidebarOpen : false,
+      autoSaveEnabled:
+        typeof obj.autoSaveEnabled === 'boolean' ? obj.autoSaveEnabled : true,
     }
   } catch {
-    return { partsSidebarOpen: true, propsSidebarOpen: false }
+    return { partsSidebarOpen: true, propsSidebarOpen: false, autoSaveEnabled: true }
   }
 }
 
-export function saveUiPreferences(prefs: UiPreferences): void {
-  safeSetLocalItem(UI_PREFS_STORAGE_KEY, JSON.stringify(prefs))
+export function saveUiPreferences(prefs: Partial<UiPreferences>): void {
+  const current = loadUiPreferences()
+  safeSetLocalItem(UI_PREFS_STORAGE_KEY, JSON.stringify({ ...current, ...prefs }))
 }
 
 export function loadSavedDesigns(): SavedDesign[] {

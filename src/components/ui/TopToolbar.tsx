@@ -3,6 +3,7 @@ import {
   Camera,
   ChevronDown,
   ClipboardList,
+  Clock,
   DoorClosed,
   DoorOpen,
   DraftingCompass,
@@ -84,7 +85,22 @@ export function TopToolbar({
 
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
   const hasUnsavedChanges = useDesignStore((s) => s.hasUnsavedChanges)
+  const lastSavedAt = useDesignStore((s) => s.lastSavedAt)
+  const lastSaveKind = useDesignStore((s) => s.lastSaveKind)
+  const autoSaveEnabled = useDesignStore((s) => s.autoSaveEnabled)
+  const toggleAutoSave = useDesignStore((s) => s.toggleAutoSave)
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
+
+  const formatSaveTime = (ts: number) => {
+    try {
+      return new Intl.DateTimeFormat('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(ts))
+    } catch {
+      return ''
+    }
+  }
 
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
@@ -313,8 +329,50 @@ export function TopToolbar({
         </button>
       </div>
 
-      {/* اليسار: حفظ، تقرير الورشة، وتصدير صورة */}
+      {/* اليسار: حالة الحفظ + حفظ + حفظ تلقائي + تقرير الورشة + تصدير */}
       <div className="flex shrink-0 items-center gap-1.5">
+        {hasUnsavedChanges ? (
+          <div
+            className="hidden items-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/10 px-2 py-1 text-[11px] font-bold text-amber-300 lg:flex"
+            title="توجد تعديلات لم تُحفظ بعد"
+          >
+            <span className="h-2 w-2 rounded-full bg-amber-400" />
+            <span>تعديلات غير محفوظة</span>
+          </div>
+        ) : (
+          lastSavedAt !== null && (
+            <div
+              className="hidden items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300 lg:flex"
+              title="آخر حفظ للتصميم"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span className="tabular-nums">
+                {lastSaveKind === 'auto' ? 'تم الحفظ تلقائياً' : 'تم الحفظ'}{' '}
+                {formatSaveTime(lastSavedAt)}
+              </span>
+            </div>
+          )
+        )}
+
+        <button
+          type="button"
+          onClick={toggleAutoSave}
+          className={`hidden h-9 items-center gap-1 rounded-xl border px-2 text-[11px] font-bold transition sm:flex ${
+            autoSaveEnabled
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:text-slate-200'
+          }`}
+          title={
+            autoSaveEnabled
+              ? 'الحفظ التلقائي كل 5 دقائق: مفعّل (اضغط للإيقاف)'
+              : 'الحفظ التلقائي: متوقف (اضغط للتفعيل كل 5 دقائق)'
+          }
+          aria-pressed={autoSaveEnabled}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">{autoSaveEnabled ? 'تلقائي' : 'يدوي'}</span>
+        </button>
+
         <button
           type="button"
           onClick={onOpenDesignsModal}

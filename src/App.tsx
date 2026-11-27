@@ -16,10 +16,12 @@ import { QuickActionMenu } from './components/ui/QuickActionMenu'
 import { TapeMeasureHud } from './components/ui/TapeMeasureHud'
 import { TopToolbar } from './components/ui/TopToolbar'
 import { WorkshopReportModal } from './components/ui/WorkshopReportModal'
+import { useAutoSave } from './hooks/useAutoSave'
 import { useDesignStore } from './store/useDesignStore'
 import { checkStoredAuthSession, clearAuthSession } from './utils/auth'
 
 function WorkspaceApp({ onLock }: { onLock: () => void }) {
+  useAutoSave()
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [mobilePartsOpen, setMobilePartsOpen] = useState(false)

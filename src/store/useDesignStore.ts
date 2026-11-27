@@ -314,8 +314,12 @@ interface DesignState {
   savedDesigns: SavedDesign[]
   customTemplates: CustomTemplate[]
   lastSavedAt: number | null
+  lastSaveKind: 'manual' | 'auto' | null
+  autoSaveEnabled: boolean
   savedSignature: string
   hasUnsavedChanges: boolean
+  toggleAutoSave: () => void
+  performAutoSave: () => boolean
   newEmptyDesign: () => void
   resetToStarterTemplate: () => void
   applyFurnitureTemplate: (templateId: string, mode: 'replace' | 'append') => void
@@ -437,6 +441,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   savedDesigns: initialSavedDesigns,
   customTemplates: loadCustomTemplates(),
   lastSavedAt: null,
+  lastSaveKind: null,
+  autoSaveEnabled: initialUiPrefs.autoSaveEnabled,
   savedSignature: EMPTY_DESIGN_SIGNATURE,
   hasUnsavedChanges: false,
 
@@ -1411,6 +1417,71 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     })
   },
 
+  toggleAutoSave: () => {
+    const next = !get().autoSaveEnabled
+    saveUiPreferences({ autoSaveEnabled: next })
+    set({
+      autoSaveEnabled: next,
+      statusToast: next ? 'تم تفعيل الحفظ التلقائي كل 5 دقائق' : 'تم إيقاف الحفظ التلقائي',
+    })
+  },
+
+  performAutoSave: () => {
+    const {
+      autoSaveEnabled,
+      panels,
+      guides,
+      hasUnsavedChanges,
+      currentDesignId,
+      currentDesignName,
+    } = get()
+
+    if (!autoSaveEnabled || panels.length === 0 || !hasUnsavedChanges) {
+      return false
+    }
+
+    const thumbnail = captureSceneThumbnail()
+    const isExisting = currentDesignId !== null
+
+    let targetName = currentDesignName
+    if (!isExisting) {
+      let stamp = ''
+      try {
+        stamp = new Intl.DateTimeFormat('ar-EG', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date())
+      } catch {
+        stamp = new Date().toLocaleTimeString()
+      }
+      targetName = `مسودة تلقائية - ${stamp}`
+    }
+
+    const { design, allDesigns } = saveDesignByName(
+      targetName,
+      panels,
+      guides,
+      isExisting ? currentDesignId : null,
+      thumbnail,
+      !isExisting
+    )
+    const nextSignature = computeDesignSignature(panels, guides)
+    saveAutosave(panels, guides, design.name, design.id)
+
+    set({
+      savedDesigns: allDesigns,
+      currentDesignId: design.id,
+      currentDesignName: design.name,
+      lastSavedAt: design.updatedAt,
+      lastSaveKind: 'auto',
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
+    })
+    return true
+  },
+
   newEmptyDesign: () => {
     const { panels, guides, past } = get()
     const nextSignature = computeDesignSignature([], [])
@@ -1424,6 +1495,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       activeReferenceEdge: null,
       currentDesignId: null,
       currentDesignName: 'تصميم جديد',
+      lastSavedAt: null,
+      lastSaveKind: null,
       savedSignature: nextSignature,
       hasUnsavedChanges: false,
       past: panels.length > 0 || guides.length > 0 ? pushPast(past, panels, guides) : past,
@@ -1676,6 +1749,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       currentDesignId: design.id,
       currentDesignName: design.name,
       lastSavedAt: design.updatedAt,
+      lastSaveKind: 'manual',
       savedSignature: nextSignature,
       hasUnsavedChanges: false,
       statusToast: asNew ? `تم حفظ نسخة جديدة: ${design.name}` : `تم حفظ التعديلات: ${design.name}`,
@@ -1710,6 +1784,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       currentDesignId: design.id,
       currentDesignName: design.name,
       lastSavedAt: design.updatedAt,
+      lastSaveKind: 'manual',
       savedSignature: nextSignature,
       hasUnsavedChanges: false,
       past: pushPast(past, panels, guides),
@@ -1739,6 +1814,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       activeReferenceEdge: null,
       currentDesignId: found.id,
       currentDesignName: found.name,
+      lastSavedAt: found.updatedAt || null,
+      lastSaveKind: 'manual',
       savedSignature: nextSignature,
       hasUnsavedChanges: false,
       past: pushPast(past, panels, guides),
