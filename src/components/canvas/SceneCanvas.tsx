@@ -1,5 +1,6 @@
+import { AlertTriangle, RotateCcw } from 'lucide-react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
@@ -13,6 +14,20 @@ import { PanelTransformGizmo } from './PanelTransformGizmo'
 import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
+
+function isWebGLSupported(): boolean {
+  try {
+    if (typeof document === 'undefined') return false
+    const canvas = document.createElement('canvas')
+    return Boolean(
+      canvas.getContext('webgl2') ||
+        canvas.getContext('webgl') ||
+        canvas.getContext('experimental-webgl')
+    )
+  } catch {
+    return false
+  }
+}
 
 function buildExportFilename(designName: string, suffix?: string): string {
   const cleaned = designName
@@ -197,7 +212,17 @@ export function SceneCanvas() {
   const selectGuide = useDesignStore((s) => s.selectGuide)
 
   const [objectMap, setObjectMap] = useState<Record<string, THREE.Object3D>>({})
+  const [contextLost, setContextLost] = useState(false)
   const tapeHandlersRef = useRef<TapePanelHandlers | null>(null)
+  const detachWebglListenersRef = useRef<(() => void) | null>(null)
+  const webglAvailable = useMemo(() => isWebGLSupported(), [])
+
+  useEffect(() => {
+    return () => {
+      detachWebglListenersRef.current?.()
+      detachWebglListenersRef.current = null
+    }
+  }, [])
 
   const visiblePanels = interfacesHidden
     ? panels.filter((p) => !isInterfaceRole(p.role))
@@ -224,6 +249,39 @@ export function SceneCanvas() {
   const selectedObject =
     selectedPanelId && !isSelectedHidden ? objectMap[selectedPanelId] ?? null : null
 
+  if (!webglAvailable || contextLost) {
+    return (
+      <div
+        dir="rtl"
+        className="flex h-full w-full items-center justify-center bg-slate-950 p-6 text-slate-100"
+      >
+        <div className="w-full max-w-md rounded-3xl border border-amber-500/35 bg-slate-900/95 p-6 text-center shadow-2xl">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-400">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-extrabold text-slate-100">
+            {contextLost
+              ? 'توقف محرك الرسوميات ثلاثي الأبعاد مؤقتاً'
+              : 'المتصفح أو الجهاز لا يدعم WebGL حالياً'}
+          </h3>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+            {contextLost
+              ? 'حدث فقدان لسياق WebGL بسبب ضغط الذاكرة على الجهاز. يمكنك إعادة تحميل الصفحة لاستئناف العمل.'
+              : 'تأكد من تفعيل تسريع الرسوميات (Hardware Acceleration) أو استخدم متصفحاً حديثاً.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 text-xs font-extrabold text-slate-950 transition hover:bg-amber-400"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>إعادة تحميل المشهد</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={`relative h-full w-full canvas-touch-lock ${
@@ -235,6 +293,23 @@ export function SceneCanvas() {
         dpr={[1, 2]}
         camera={{ position: [145, 115, 175], fov: 42, near: 1, far: 1500 }}
         gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
+        onCreated={({ gl }) => {
+          detachWebglListenersRef.current?.()
+          const canvas = gl.domElement
+          const onContextLost = (event: Event) => {
+            event.preventDefault()
+            setContextLost(true)
+          }
+          const onContextRestored = () => {
+            setContextLost(false)
+          }
+          canvas.addEventListener('webglcontextlost', onContextLost)
+          canvas.addEventListener('webglcontextrestored', onContextRestored)
+          detachWebglListenersRef.current = () => {
+            canvas.removeEventListener('webglcontextlost', onContextLost)
+            canvas.removeEventListener('webglcontextrestored', onContextRestored)
+          }
+        }}
         onPointerMissed={() => {
           if (!isDraggingGizmo && !isDraggingTape && toolMode === 'select') {
             selectPanel(null)

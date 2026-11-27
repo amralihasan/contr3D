@@ -9,6 +9,7 @@ import { SceneCanvas } from './components/canvas/SceneCanvas'
 import { ViewportOverlay } from './components/canvas/ViewportOverlay'
 import { AuthGate } from './components/ui/AuthGate'
 import { DesignsModal } from './components/ui/DesignsModal'
+import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
 import { QuickActionMenu } from './components/ui/QuickActionMenu'
@@ -227,7 +228,9 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
             }
           }}
         >
-          <SceneCanvas />
+          <ErrorBoundary compact title="تعذر تشغيل مشهد العرض ثلاثي الأبعاد (3D)">
+            <SceneCanvas />
+          </ErrorBoundary>
           <ViewportOverlay />
           <TapeMeasureHud />
 

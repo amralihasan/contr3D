@@ -33,10 +33,13 @@ import { computeAutoDistribution, type DistributeAxis } from '../utils/distribut
 import { clampCornerRadius } from '../utils/panelGeometry'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
 import {
+  deepClone,
   deleteSavedDesign,
   loadAutosave,
   loadSavedDesigns,
   loadUiPreferences,
+  sanitizeGuides,
+  sanitizePanels,
   saveAutosave,
   saveDesignByName,
   saveUiPreferences,
@@ -56,8 +59,8 @@ function createId(prefix = 'panel'): string {
 
 function cloneSnapshot(panels: FurniturePanel[], guides: GuideLine[]): HistorySnapshot {
   return {
-    panels: structuredClone(panels),
-    guides: structuredClone(guides),
+    panels: deepClone(panels),
+    guides: deepClone(guides),
   }
 }
 
@@ -159,9 +162,18 @@ function rotateEulerWorld90(rotation: Vec3, axis: Axis): Vec3 {
 }
 
 function getInitialData() {
-  const autosave = loadAutosave()
-  if (autosave && (autosave.panels.length > 0 || autosave.guides.length > 0)) {
-    return autosave
+  try {
+    const autosave = loadAutosave()
+    if (autosave && (autosave.panels.length > 0 || autosave.guides.length > 0)) {
+      return {
+        panels: sanitizePanels(autosave.panels),
+        guides: sanitizeGuides(autosave.guides),
+        designName: autosave.designName || 'وحدة كونتر أساسية',
+        designId: autosave.designId ?? null,
+      }
+    }
+  } catch {
+    // fallback إلى التصميم الافتراضي عند تعذر القراءة
   }
   return {
     panels: createStarterPanels(),
@@ -785,7 +797,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     const offset = Math.max(hx * 2 + 2, 10)
 
     const copy: FurniturePanel = {
-      ...structuredClone(source),
+      ...deepClone(source),
       id: createId('panel'),
       name: `${source.name} (نسخة)`,
       position: [roundTo(source.position[0] + offset, 2), source.position[1], source.position[2]],
@@ -846,7 +858,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     if (selected.length === 0) return
 
     set({
-      clipboard: structuredClone(selected),
+      clipboard: deepClone(selected),
       statusToast:
         selected.length === 1
           ? `تم نسخ: ${selected[0].name}`
@@ -864,7 +876,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 
     set({
-      clipboard: structuredClone(selected),
+      clipboard: deepClone(selected),
       panels: nextPanels,
       selectedPanelIds: [],
       selectedPanelId: null,
@@ -882,7 +894,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     if (clipboard.length === 0) return
 
     const pasted: FurniturePanel[] = clipboard.map((item) => ({
-      ...structuredClone(item),
+      ...deepClone(item),
       id: createId('panel'),
       name: item.name.endsWith('(نسخة)') ? item.name : `${item.name} (نسخة)`,
       position: [roundTo(item.position[0] + 5, 2), item.position[1], item.position[2]],
@@ -894,7 +906,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
     set({
       panels: nextPanels,
-      clipboard: structuredClone(pasted),
+      clipboard: deepClone(pasted),
       toolMode: 'select',
       selectedPanelIds: pastedIds,
       selectedPanelId: pastedIds[pastedIds.length - 1] ?? null,
@@ -915,7 +927,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     if (selected.length === 0) return
 
     const copies: FurniturePanel[] = selected.map((item) => ({
-      ...structuredClone(item),
+      ...deepClone(item),
       id: createId('panel'),
       name: item.name.endsWith('(نسخة)') ? item.name : `${item.name} (نسخة)`,
       position: [roundTo(item.position[0] + 5, 2), item.position[1], item.position[2]],
@@ -1315,8 +1327,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     saveAutosave(previous.panels, previous.guides, get().currentDesignName, get().currentDesignId)
 
     set({
-      panels: structuredClone(previous.panels),
-      guides: structuredClone(previous.guides),
+      panels: deepClone(previous.panels),
+      guides: deepClone(previous.guides),
       past: nextPast,
       future: nextFuture,
       selectedPanelIds: nextSelectedIds,
@@ -1340,8 +1352,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     saveAutosave(next.panels, next.guides, get().currentDesignName, get().currentDesignId)
 
     set({
-      panels: structuredClone(next.panels),
-      guides: structuredClone(next.guides),
+      panels: deepClone(next.panels),
+      guides: deepClone(next.guides),
       past: nextPast,
       future: nextFuture,
       selectedPanelIds: nextSelectedIds,
@@ -1408,8 +1420,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     const found = savedDesigns.find((d) => d.id === id)
     if (!found) return
 
-    const loadedPanels = structuredClone(found.panels)
-    const loadedGuides = structuredClone(found.guides ?? [])
+    const loadedPanels = sanitizePanels(deepClone(found.panels))
+    const loadedGuides = sanitizeGuides(deepClone(found.guides ?? []))
     saveAutosave(loadedPanels, loadedGuides, found.name, found.id)
 
     set({

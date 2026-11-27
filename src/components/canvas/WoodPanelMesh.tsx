@@ -37,7 +37,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       s.selectedPanelIds.includes(panel.id)
   )
 
-  const matSpec = MATERIALS[panel.materialId]
+  const matSpec = MATERIALS[panel.materialId] ?? MATERIALS.light_oak
   const texture = useMemo(() => {
     const tex = getWoodTexture(panel.materialId)
     if (!tex) return null

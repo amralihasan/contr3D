@@ -167,7 +167,11 @@ function drawDimensionLine({
   ctx.strokeStyle = '#cbd5e1'
   ctx.lineWidth = Math.max(1, 1 * scale)
   ctx.beginPath()
-  ctx.roundRect(clampedMidX - boxW / 2, clampedMidY - boxH / 2, boxW, boxH, 5 * scale)
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(clampedMidX - boxW / 2, clampedMidY - boxH / 2, boxW, boxH, 5 * scale)
+  } else {
+    ctx.rect(clampedMidX - boxW / 2, clampedMidY - boxH / 2, boxW, boxH)
+  }
   ctx.fill()
   ctx.stroke()
 

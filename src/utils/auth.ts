@@ -15,6 +15,18 @@ const SHA256_K = [
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ]
 
+function encodeUtf8(value: string): Uint8Array {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value)
+  }
+  const encoded = unescape(encodeURIComponent(value))
+  const bytes = new Uint8Array(encoded.length)
+  for (let i = 0; i < encoded.length; i += 1) {
+    bytes[i] = encoded.charCodeAt(i)
+  }
+  return bytes
+}
+
 function fallbackSha256Hex(bytes: Uint8Array): string {
   const bitLen = bytes.length * 8
   const withOne = bytes.length + 1
@@ -78,12 +90,16 @@ function fallbackSha256Hex(bytes: Uint8Array): string {
 }
 
 export async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value)
-  if (globalThis.crypto?.subtle) {
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
-    return Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('')
+  const bytes = encodeUtf8(value)
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    try {
+      const digest = await window.crypto.subtle.digest('SHA-256', bytes as BufferSource)
+      return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('')
+    } catch {
+      // في بعض المتصفحات عبر http قد يفشل subtle رغم وجوده، فننتقل للدالة البديلة
+    }
   }
   return fallbackSha256Hex(bytes)
 }
@@ -120,9 +136,15 @@ async function buildSessionToken(expectedHash: string): Promise<string> {
 
 function readStoredToken(): string | null {
   try {
-    const raw =
-      localStorage.getItem(AUTH_STORAGE_KEY) ??
-      sessionStorage.getItem(AUTH_STORAGE_KEY)
+    const localRaw =
+      typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem(AUTH_STORAGE_KEY)
+        : null
+    const sessionRaw =
+      typeof window !== 'undefined' && window.sessionStorage
+        ? window.sessionStorage.getItem(AUTH_STORAGE_KEY)
+        : null
+    const raw = localRaw ?? sessionRaw
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (
@@ -159,31 +181,43 @@ export async function verifyAndCreateAuthSession(
   })
 
   clearAuthSession()
-  if (rememberMe) {
-    localStorage.setItem(AUTH_STORAGE_KEY, payload)
-  } else {
-    sessionStorage.setItem(AUTH_STORAGE_KEY, payload)
+  try {
+    if (rememberMe && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, payload)
+    } else if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(AUTH_STORAGE_KEY, payload)
+    }
+  } catch {
+    // السماح بالدخول حتى لو حظر المتصفح التخزين (مثل التصفح الخفي)
   }
 
   return true
 }
 
 export async function checkStoredAuthSession(): Promise<boolean> {
-  const storedToken = readStoredToken()
-  if (!storedToken) return false
-  const expectedHash = await resolveExpectedPasswordHash()
-  const expectedToken = await buildSessionToken(expectedHash)
-  return timingSafeEqual(storedToken, expectedToken)
+  try {
+    const storedToken = readStoredToken()
+    if (!storedToken) return false
+    const expectedHash = await resolveExpectedPasswordHash()
+    const expectedToken = await buildSessionToken(expectedHash)
+    return timingSafeEqual(storedToken, expectedToken)
+  } catch {
+    return false
+  }
 }
 
 export function clearAuthSession() {
   try {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(AUTH_STORAGE_KEY)
+    }
   } catch {
     // تجاهل أخطاء التخزين في أوضاع التصفح المقيدة
   }
   try {
-    sessionStorage.removeItem(AUTH_STORAGE_KEY)
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
+    }
   } catch {
     // تجاهل أخطاء التخزين في أوضاع التصفح المقيدة
   }
