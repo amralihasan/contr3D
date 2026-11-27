@@ -78,7 +78,7 @@ async function readCustomTemplatesList() {
 }
 
 const app = express()
-app.use(express.json({ limit: '15mb' }))
+app.use(express.json({ limit: '20mb' }))
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
@@ -338,6 +338,19 @@ app.delete('/api/custom-templates/:id', async (req, res) => {
     console.error('Failed to delete custom template:', err)
     res.status(500).json({ error: 'تعذر حذف القالب المخصص.' })
   }
+})
+
+// معالجة أخطاء حجم الملف أو صيغة JSON غير الصالحة برد JSON واضح
+app.use((err, _req, res, next) => {
+  if (err && typeof err === 'object' && 'type' in err && err.type === 'entity.too.large') {
+    res.status(413).json({ error: 'حجم ملف المشروع أكبر من الحد المسموح (20 ميجابايت).' })
+    return
+  }
+  if (err instanceof SyntaxError && 'body' in err) {
+    res.status(400).json({ error: 'تنسيق بيانات JSON المرسلة غير صالح.' })
+    return
+  }
+  next(err)
 })
 
 // تقديم واجهة الإنتاج المبنية في مجلد dist/ على نفس البورت

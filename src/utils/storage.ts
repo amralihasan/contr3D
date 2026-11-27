@@ -478,11 +478,17 @@ export function exportProjectToJsonFile(
   }, 200)
 }
 
-export function parseAndValidateProjectJson(rawText: string): {
+export interface ImportedProjectData {
+  id: string
   name: string
+  createdAt: number
+  updatedAt: number
   panels: FurniturePanel[]
   guides: GuideLine[]
-} {
+  thumbnail?: string
+}
+
+export function parseAndValidateProjectJson(rawText: string): ImportedProjectData {
   let parsed: unknown
   try {
     parsed = JSON.parse(rawText)
@@ -494,7 +500,12 @@ export function parseAndValidateProjectJson(rawText: string): {
     throw new Error('بنية الملف غير صالحة: يجب أن يحتوي على بيانات مشروع صحيحة.')
   }
 
-  const obj = parsed as Record<string, unknown>
+  const root = parsed as Record<string, unknown>
+  const obj =
+    root.design && typeof root.design === 'object' && !Array.isArray(root.design)
+      ? (root.design as Record<string, unknown>)
+      : root
+
   if ('format' in obj && obj.format !== undefined && obj.format !== 'contr3d-project') {
     throw new Error('هذا الملف ليس ملف مشروع متوافقاً مع مصمم الكونتر 3D.')
   }
@@ -503,7 +514,20 @@ export function parseAndValidateProjectJson(rawText: string): {
     throw new Error('الملف غير مكتمل: لا يحتوي على قائمة ألواح التصميم.')
   }
 
-  const cleanPanels = sanitizePanels(obj.panels)
+  const now = Date.now()
+  const panelsWithIds = obj.panels.map((item, idx) => {
+    if (!item || typeof item !== 'object') return item
+    const panelObj = item as Record<string, unknown>
+    if (typeof panelObj.id === 'string' && panelObj.id.trim().length > 0) {
+      return panelObj
+    }
+    return {
+      ...panelObj,
+      id: `panel_imp_${now}_${idx}`,
+    }
+  })
+
+  const cleanPanels = sanitizePanels(panelsWithIds)
   if (obj.panels.length > 0 && cleanPanels.length === 0) {
     throw new Error('بيانات الألواح داخل الملف غير صالحة أو تالفة.')
   }
@@ -514,10 +538,28 @@ export function parseAndValidateProjectJson(rawText: string): {
       ? obj.name.trim()
       : 'مشروع مستورد'
 
+  const rawUpdatedAt =
+    typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt) && obj.updatedAt > 0
+      ? obj.updatedAt
+      : now
+  const rawCreatedAt =
+    typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) && obj.createdAt > 0
+      ? obj.createdAt
+      : rawUpdatedAt
+
+  const thumbnail =
+    typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+      ? obj.thumbnail
+      : undefined
+
   return {
+    id: `design_${now}_${Math.random().toString(36).slice(2, 7)}`,
     name: cleanName,
+    createdAt: rawCreatedAt,
+    updatedAt: now,
     panels: cleanPanels,
     guides: cleanGuides,
+    thumbnail,
   }
 }
 

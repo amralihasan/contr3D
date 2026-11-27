@@ -95,14 +95,19 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
   }
 
   const handleImportFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+    const input = e.currentTarget
+    const file = input.files?.[0]
+    if (!file) {
+      input.value = ''
+      return
+    }
 
     setImportError(null)
+    clearDesignsError()
     try {
       const text = await file.text()
       const parsed = parseAndValidateProjectJson(text)
+      setNameInput(parsed.name)
       const saved = await importDesignProject(parsed)
       if (saved) {
         onClose()
@@ -111,6 +116,8 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
       setImportError(
         err instanceof Error ? err.message : 'تعذر قراءة ملف المشروع، تأكد من صلاحية الملف.'
       )
+    } finally {
+      input.value = ''
     }
   }
 

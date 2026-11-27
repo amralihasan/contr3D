@@ -365,6 +365,8 @@ interface DesignState {
     name: string
     panels: FurniturePanel[]
     guides: GuideLine[]
+    createdAt?: number
+    thumbnail?: string
   }) => Promise<SavedDesign | null>
   loadDesign: (id: string) => Promise<boolean>
   removeSavedDesign: (id: string) => Promise<boolean>
@@ -2123,7 +2125,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       designsError: null,
     })
 
-    const thumbnail = captureSceneThumbnail()
+    const thumbnail = data.thumbnail ?? captureSceneThumbnail()
     try {
       const { design, summary } = await saveDesignToServer({
         id: null,
@@ -2147,16 +2149,17 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
         lastSavedAt: design.updatedAt,
         lastSaveKind: 'manual',
         hasUnsavedChanges: false,
-        statusToast: `تم استيراد وفتح المشروع: ${design.name}`,
+        statusToast: `تم استيراد وحفظ المشروع: ${design.name}`,
       })
       return design
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'تم فتح الملف محلياً، لكن تعذر رفعه للسيرفر.'
+      const serverReason =
+        err instanceof Error ? err.message : 'تعذر الاتصال بالسيرفر.'
+      const message = `تم فتح التصميم في المشهد، لكن تعذر حفظه على السيرفر: ${serverReason}`
       set({
         designsActionLoading: false,
         designsError: message,
-        statusToast: message,
+        statusToast: 'تم فتح التصميم في المشهد (تعذر الحفظ على السيرفر)',
       })
       return null
     }
