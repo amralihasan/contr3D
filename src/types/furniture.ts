@@ -152,6 +152,15 @@ export interface SavedDesign {
   thumbnail?: string
 }
 
+export interface CustomTemplate {
+  id: string
+  name: string
+  createdAt: number
+  dimensions: PanelDimensions
+  panels: Omit<FurniturePanel, 'id'>[]
+  thumbnail?: string
+}
+
 export interface SnapFeedback {
   x: boolean
   y: boolean

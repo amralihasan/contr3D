@@ -3,6 +3,7 @@ import {
   getDefaultEdgeBanding,
   type Axis,
   type CornerRadius,
+  type CustomTemplate,
   type EdgeBanding,
   type FurniturePanel,
   type GuideLine,
@@ -13,10 +14,13 @@ import {
   type SavedDesign,
   type Vec3,
 } from '../types/furniture'
+import { computeOverallDimensions } from './dimensions'
+import { roundTo } from './snapping'
 
 const DESIGNS_STORAGE_KEY = 'counter_furniture_3d_designs_v1'
 const AUTOSAVE_STORAGE_KEY = 'counter_furniture_3d_autosave_v1'
 const UI_PREFS_STORAGE_KEY = 'counter_furniture_3d_ui_prefs_v1'
+const CUSTOM_TEMPLATES_STORAGE_KEY = 'contr3d_custom_templates'
 
 export interface UiPreferences {
   partsSidebarOpen: boolean
@@ -483,4 +487,137 @@ export function loadAutosave(): {
   } catch {
     return null
   }
+}
+
+export function loadCustomTemplates(): CustomTemplate[] {
+  try {
+    const raw = safeGetLocalItem(CUSTOM_TEMPLATES_STORAGE_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    const valid: CustomTemplate[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const obj = item as Record<string, unknown>
+      if (typeof obj.id !== 'string' || typeof obj.name !== 'string') continue
+      if (!Array.isArray(obj.panels)) continue
+
+      // إضافة معرّفات مؤقتة للتنقية ثم إزالتها للحفاظ على القالب بدون ID ثابت
+      const withTempIds = obj.panels.map((p, idx) =>
+        p && typeof p === 'object' ? { ...(p as Record<string, unknown>), id: `tpl_${idx}` } : p
+      )
+      const cleaned = sanitizePanels(withTempIds)
+      if (cleaned.length === 0) continue
+
+      const blueprints = cleaned.map(({ id: _ignored, ...rest }) => rest)
+      const computed = computeOverallDimensions(cleaned)
+      const dimsRaw = obj.dimensions as Record<string, unknown> | undefined
+      const dimensions = {
+        width:
+          dimsRaw && typeof dimsRaw.width === 'number' && Number.isFinite(dimsRaw.width)
+            ? dimsRaw.width
+            : computed?.width ?? 0,
+        height:
+          dimsRaw && typeof dimsRaw.height === 'number' && Number.isFinite(dimsRaw.height)
+            ? dimsRaw.height
+            : computed?.height ?? 0,
+        depth:
+          dimsRaw && typeof dimsRaw.depth === 'number' && Number.isFinite(dimsRaw.depth)
+            ? dimsRaw.depth
+            : computed?.depth ?? 0,
+      }
+
+      valid.push({
+        id: obj.id,
+        name: obj.name,
+        createdAt:
+          typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt)
+            ? obj.createdAt
+            : 0,
+        dimensions,
+        panels: blueprints,
+        thumbnail:
+          typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+            ? obj.thumbnail
+            : undefined,
+      })
+    }
+
+    return valid.sort((a, b) => b.createdAt - a.createdAt)
+  } catch {
+    return []
+  }
+}
+
+export function persistCustomTemplates(templates: CustomTemplate[]): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(CUSTOM_TEMPLATES_STORAGE_KEY, JSON.stringify(templates))
+  } catch {
+    try {
+      const stripped = templates.map((t, idx) => (idx === 0 ? t : { ...t, thumbnail: undefined }))
+      window.localStorage.setItem(CUSTOM_TEMPLATES_STORAGE_KEY, JSON.stringify(stripped))
+    } catch {
+      try {
+        const noThumbs = templates.map((t) => ({ ...t, thumbnail: undefined }))
+        window.localStorage.setItem(CUSTOM_TEMPLATES_STORAGE_KEY, JSON.stringify(noThumbs))
+      } catch {
+        // تجاهل إذا كان التخزين محظوراً
+      }
+    }
+  }
+}
+
+export function saveCustomTemplate(
+  name: string,
+  sourcePanels: FurniturePanel[],
+  thumbnail?: string
+): { template: CustomTemplate; allTemplates: CustomTemplate[] } | null {
+  if (sourcePanels.length === 0) return null
+
+  const overall = computeOverallDimensions(sourcePanels)
+  if (!overall) return null
+
+  // تصفير الإحداثيات النسبية بحيث يكون المركز الأفقي (0, 0) وأقل نقطة ملامسة للأرض (Y = 0)
+  const centerX = (overall.minX + overall.maxX) / 2
+  const minY = overall.minY
+  const centerZ = (overall.minZ + overall.maxZ) / 2
+
+  const normalizedBlueprints: Omit<FurniturePanel, 'id'>[] = sourcePanels.map((panel) => {
+    const cloned = deepClone(panel)
+    const { id: _ignored, ...rest } = cloned
+    return {
+      ...rest,
+      position: [
+        roundTo(rest.position[0] - centerX, 2),
+        roundTo(rest.position[1] - minY, 2),
+        roundTo(rest.position[2] - centerZ, 2),
+      ],
+    }
+  })
+
+  const trimmed = name.trim() || 'قالب مخصص'
+  const template: CustomTemplate = {
+    id: `ctpl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name: trimmed,
+    createdAt: Date.now(),
+    dimensions: {
+      width: overall.width,
+      height: overall.height,
+      depth: overall.depth,
+    },
+    panels: normalizedBlueprints,
+    thumbnail,
+  }
+
+  const nextList = [template, ...loadCustomTemplates()]
+  persistCustomTemplates(nextList)
+  return { template, allTemplates: nextList }
+}
+
+export function deleteCustomTemplate(id: string): CustomTemplate[] {
+  const next = loadCustomTemplates().filter((t) => t.id !== id)
+  persistCustomTemplates(next)
+  return next
 }

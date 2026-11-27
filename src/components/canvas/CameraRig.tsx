@@ -12,6 +12,8 @@ export function CameraRig() {
 
   const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const cameraRequestTick = useDesignStore((s) => s.cameraRequestTick)
+  const cameraFocusTarget = useDesignStore((s) => s.cameraFocusTarget)
+  const cameraFocusTick = useDesignStore((s) => s.cameraFocusTick)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
   const isDraggingHuman = useDesignStore((s) => s.isDraggingHuman)
@@ -29,6 +31,14 @@ export function CameraRig() {
     animElapsedRef.current = 0
     animatingRef.current = true
   }, [cameraPreset, cameraRequestTick])
+
+  useEffect(() => {
+    if (cameraFocusTick === 0 || !cameraFocusTarget) return
+    desiredPosRef.current.set(...cameraFocusTarget.position)
+    desiredTargetRef.current.set(...cameraFocusTarget.target)
+    animElapsedRef.current = 0
+    animatingRef.current = true
+  }, [cameraFocusTarget, cameraFocusTick])
 
   useFrame((_, delta) => {
     const controls = controlsRef.current

@@ -7,12 +7,14 @@ import {
   MIN_CLEARANCE_CM,
   MIN_PANEL_DIM_CM,
 } from '../constants/presets'
+import { FURNITURE_TEMPLATES } from '../constants/templates'
 import {
   getDefaultEdgeBanding,
   getEffectiveEdgeBanding,
   type Axis,
   type CameraPreset,
   type CornerRadius,
+  type CustomTemplate,
   type EdgeBanding,
   type EdgeSide,
   type FurniturePanel,
@@ -30,17 +32,21 @@ import {
   type Vec3,
 } from '../types/furniture'
 import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
+import { computeOverallDimensions } from '../utils/dimensions'
 import { clampCornerRadius } from '../utils/panelGeometry'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
 import {
   deepClone,
+  deleteCustomTemplate,
   deleteSavedDesign,
   loadAutosave,
+  loadCustomTemplates,
   loadSavedDesigns,
   loadUiPreferences,
   sanitizeGuides,
   sanitizePanels,
   saveAutosave,
+  saveCustomTemplate,
   saveDesignByName,
   saveUiPreferences,
 } from '../utils/storage'
@@ -245,6 +251,8 @@ interface DesignState {
 
   cameraPreset: CameraPreset
   cameraRequestTick: number
+  cameraFocusTarget: { position: Vec3; target: Vec3 } | null
+  cameraFocusTick: number
 
   past: HistorySnapshot[]
   future: HistorySnapshot[]
@@ -334,11 +342,16 @@ interface DesignState {
   currentDesignId: string | null
   currentDesignName: string
   savedDesigns: SavedDesign[]
+  customTemplates: CustomTemplate[]
   lastSavedAt: number | null
   savedSignature: string
   hasUnsavedChanges: boolean
   newEmptyDesign: () => void
   resetToStarterTemplate: () => void
+  applyFurnitureTemplate: (templateId: string, mode: 'replace' | 'append') => void
+  saveAsCustomTemplate: (name: string, scope: 'all' | 'selected') => CustomTemplate | null
+  applyCustomTemplate: (templateId: string, mode: 'replace' | 'append') => void
+  removeCustomTemplate: (templateId: string) => void
   saveCurrentDesign: (name: string, asNew?: boolean) => SavedDesign
   importDesignProject: (data: {
     name: string
@@ -442,6 +455,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   cameraPreset: 'perspective',
   cameraRequestTick: 0,
+  cameraFocusTarget: null,
+  cameraFocusTick: 0,
 
   past: [],
   future: [],
@@ -450,6 +465,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   currentDesignId: initial.designId,
   currentDesignName: initial.designName,
   savedDesigns: initialSavedDesigns,
+  customTemplates: loadCustomTemplates(),
   lastSavedAt: null,
   savedSignature: initialSavedSignature,
   hasUnsavedChanges: initialHasUnsavedChanges,
@@ -847,6 +863,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       interfacesHidden: preset.category === 'front' ? false : get().interfacesHidden,
       past: pushPast(past, panels, guides),
       future: [],
+      statusToast: `تم إضافة ${newPanel.name}`,
     })
   },
 
@@ -1462,6 +1479,212 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       hasUnsavedChanges: false,
       past: pushPast(past, panels, guides),
       future: [],
+    })
+  },
+
+  applyFurnitureTemplate: (templateId, mode) => {
+    const template = FURNITURE_TEMPLATES.find((t) => t.id === templateId)
+    if (!template) return
+
+    const { panels, guides, past, currentDesignName, currentDesignId, focusMode, cameraFocusTick } =
+      get()
+    const rawBlueprints = template.buildPanels()
+    const span = Math.max(
+      template.dimensions.width,
+      template.dimensions.height,
+      template.dimensions.depth,
+      50
+    )
+    const camDist = Math.min(460, Math.max(135, span * 1.65))
+    const targetY = roundTo(Math.max(20, template.dimensions.height * 0.45), 1)
+    const camY = roundTo(Math.max(targetY + 35, template.dimensions.height + 38, camDist * 0.46), 1)
+
+    if (mode === 'replace' || panels.length === 0) {
+      const nextPanels: FurniturePanel[] = rawBlueprints.map((bp) => ({
+        ...deepClone(bp),
+        id: createId('panel'),
+      }))
+      const nextSignature = computeDesignSignature(nextPanels, [])
+      saveAutosave(nextPanels, [], template.name, null)
+
+      set({
+        panels: nextPanels,
+        guides: [],
+        selectedPanelId: null,
+        selectedPanelIds: [],
+        selectedGuideId: null,
+        activeReferenceEdge: null,
+        propsSidebarOpen: false,
+        currentDesignId: null,
+        currentDesignName: template.name,
+        savedSignature: nextSignature,
+        hasUnsavedChanges: false,
+        past: panels.length > 0 || guides.length > 0 ? pushPast(past, panels, guides) : past,
+        future: [],
+        cameraFocusTarget: {
+          position: [roundTo(camDist * 0.58, 1), camY, roundTo(camDist * 0.78, 1)],
+          target: [0, targetY, 0],
+        },
+        cameraFocusTick: cameraFocusTick + 1,
+        statusToast: `تم إضافة ${template.name}`,
+      })
+      return
+    }
+
+    // الإضافة بجانب القطع الموجودة لتصميم وحدات مجمعة
+    const existingOverall = computeOverallDimensions(panels)
+    const offsetX = existingOverall
+      ? roundTo(existingOverall.maxX + 15 + template.dimensions.width / 2, 1)
+      : 0
+
+    const appendedPanels: FurniturePanel[] = rawBlueprints.map((bp) => ({
+      ...deepClone(bp),
+      id: createId('panel'),
+      position: [
+        roundTo(bp.position[0] + offsetX, 2),
+        bp.position[1],
+        bp.position[2],
+      ],
+    }))
+
+    const appendedIds = appendedPanels.map((p) => p.id)
+    const nextPanels = [...panels, ...appendedPanels]
+    saveAutosave(nextPanels, guides, currentDesignName, currentDesignId)
+
+    set({
+      panels: nextPanels,
+      selectedPanelIds: appendedIds,
+      selectedPanelId: appendedIds[appendedIds.length - 1] ?? null,
+      selectedGuideId: null,
+      propsSidebarOpen: focusMode ? false : appendedIds.length > 0,
+      past: pushPast(past, panels, guides),
+      future: [],
+      cameraFocusTarget: {
+        position: [roundTo(offsetX + camDist * 0.58, 1), camY, roundTo(camDist * 0.78, 1)],
+        target: [roundTo(offsetX, 1), targetY, 0],
+      },
+      cameraFocusTick: cameraFocusTick + 1,
+      statusToast: `تم إضافة "${template.name}" بجانب التصميم`,
+    })
+  },
+
+  saveAsCustomTemplate: (name, scope) => {
+    const { panels, selectedPanelIds } = get()
+    const targetPanels =
+      scope === 'selected'
+        ? panels.filter((p) => selectedPanelIds.includes(p.id))
+        : panels
+
+    if (targetPanels.length === 0) return null
+
+    const thumbnail = captureSceneThumbnail()
+    const saved = saveCustomTemplate(name, targetPanels, thumbnail)
+    if (!saved) return null
+
+    set({
+      customTemplates: saved.allTemplates,
+      statusToast: `تم حفظ القالب المخصص: ${saved.template.name}`,
+    })
+    return saved.template
+  },
+
+  applyCustomTemplate: (templateId, mode) => {
+    const {
+      customTemplates,
+      panels,
+      guides,
+      past,
+      currentDesignName,
+      currentDesignId,
+      focusMode,
+      cameraFocusTick,
+    } = get()
+    const template = customTemplates.find((t) => t.id === templateId)
+    if (!template) return
+
+    const span = Math.max(
+      template.dimensions.width,
+      template.dimensions.height,
+      template.dimensions.depth,
+      50
+    )
+    const camDist = Math.min(460, Math.max(135, span * 1.65))
+    const targetY = roundTo(Math.max(20, template.dimensions.height * 0.45), 1)
+    const camY = roundTo(Math.max(targetY + 35, template.dimensions.height + 38, camDist * 0.46), 1)
+
+    if (mode === 'replace' || panels.length === 0) {
+      const nextPanels: FurniturePanel[] = template.panels.map((bp) => ({
+        ...deepClone(bp),
+        id: createId('panel'),
+      }))
+      const nextSignature = computeDesignSignature(nextPanels, [])
+      saveAutosave(nextPanels, [], template.name, null)
+
+      set({
+        panels: nextPanels,
+        guides: [],
+        selectedPanelId: null,
+        selectedPanelIds: [],
+        selectedGuideId: null,
+        activeReferenceEdge: null,
+        propsSidebarOpen: false,
+        currentDesignId: null,
+        currentDesignName: template.name,
+        savedSignature: nextSignature,
+        hasUnsavedChanges: false,
+        past: panels.length > 0 || guides.length > 0 ? pushPast(past, panels, guides) : past,
+        future: [],
+        cameraFocusTarget: {
+          position: [roundTo(camDist * 0.58, 1), camY, roundTo(camDist * 0.78, 1)],
+          target: [0, targetY, 0],
+        },
+        cameraFocusTick: cameraFocusTick + 1,
+        statusToast: `تم إضافة ${template.name}`,
+      })
+      return
+    }
+
+    const existingOverall = computeOverallDimensions(panels)
+    const offsetX = existingOverall
+      ? roundTo(existingOverall.maxX + 15 + template.dimensions.width / 2, 1)
+      : 0
+
+    const appendedPanels: FurniturePanel[] = template.panels.map((bp) => ({
+      ...deepClone(bp),
+      id: createId('panel'),
+      position: [
+        roundTo(bp.position[0] + offsetX, 2),
+        bp.position[1],
+        bp.position[2],
+      ],
+    }))
+
+    const appendedIds = appendedPanels.map((p) => p.id)
+    const nextPanels = [...panels, ...appendedPanels]
+    saveAutosave(nextPanels, guides, currentDesignName, currentDesignId)
+
+    set({
+      panels: nextPanels,
+      selectedPanelIds: appendedIds,
+      selectedPanelId: appendedIds[appendedIds.length - 1] ?? null,
+      selectedGuideId: null,
+      propsSidebarOpen: focusMode ? false : appendedIds.length > 0,
+      past: pushPast(past, panels, guides),
+      future: [],
+      cameraFocusTarget: {
+        position: [roundTo(offsetX + camDist * 0.58, 1), camY, roundTo(camDist * 0.78, 1)],
+        target: [roundTo(offsetX, 1), targetY, 0],
+      },
+      cameraFocusTick: cameraFocusTick + 1,
+      statusToast: `تم إضافة "${template.name}" بجانب التصميم`,
+    })
+  },
+
+  removeCustomTemplate: (templateId) => {
+    const nextList = deleteCustomTemplate(templateId)
+    set({
+      customTemplates: nextList,
+      statusToast: 'تم حذف القالب المخصص',
     })
   },
 
