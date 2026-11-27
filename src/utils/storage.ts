@@ -11,6 +11,7 @@ import {
   type PanelCategory,
   type PanelCutout,
   type PanelRole,
+  type PricingConfig,
   type SavedDesign,
   type Vec3,
 } from '../types/furniture'
@@ -21,6 +22,19 @@ const DESIGNS_STORAGE_KEY = 'counter_furniture_3d_designs_v1'
 const AUTOSAVE_STORAGE_KEY = 'counter_furniture_3d_autosave_v1'
 const UI_PREFS_STORAGE_KEY = 'counter_furniture_3d_ui_prefs_v1'
 const CUSTOM_TEMPLATES_STORAGE_KEY = 'contr3d_custom_templates'
+const PRICING_CONFIG_STORAGE_KEY = 'contr3d_pricing_config_v1'
+
+export const DEFAULT_PRICING_CONFIG: PricingConfig = {
+  sheet18Price: 1450,
+  sheet6Price: 650,
+  edgeBandingPricePerMeter: 18,
+  hingePrice: 45,
+  drawerSlidePrice: 140,
+  handlePrice: 55,
+  legsSetPrice: 320,
+  laborCost: 800,
+  profitMarginPercent: 30,
+}
 
 export interface UiPreferences {
   partsSidebarOpen: boolean
@@ -620,4 +634,41 @@ export function deleteCustomTemplate(id: string): CustomTemplate[] {
   const next = loadCustomTemplates().filter((t) => t.id !== id)
   persistCustomTemplates(next)
   return next
+}
+
+export function loadPricingConfig(): PricingConfig {
+  try {
+    const raw = safeGetLocalItem(PRICING_CONFIG_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_PRICING_CONFIG }
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PRICING_CONFIG }
+    const obj = parsed as Record<string, unknown>
+
+    const num = (val: unknown, fallback: number) =>
+      typeof val === 'number' && Number.isFinite(val) && val >= 0 ? val : fallback
+
+    return {
+      sheet18Price: num(obj.sheet18Price, DEFAULT_PRICING_CONFIG.sheet18Price),
+      sheet6Price: num(obj.sheet6Price, DEFAULT_PRICING_CONFIG.sheet6Price),
+      edgeBandingPricePerMeter: num(
+        obj.edgeBandingPricePerMeter,
+        DEFAULT_PRICING_CONFIG.edgeBandingPricePerMeter
+      ),
+      hingePrice: num(obj.hingePrice, DEFAULT_PRICING_CONFIG.hingePrice),
+      drawerSlidePrice: num(obj.drawerSlidePrice, DEFAULT_PRICING_CONFIG.drawerSlidePrice),
+      handlePrice: num(obj.handlePrice, DEFAULT_PRICING_CONFIG.handlePrice),
+      legsSetPrice: num(obj.legsSetPrice, DEFAULT_PRICING_CONFIG.legsSetPrice),
+      laborCost: num(obj.laborCost, DEFAULT_PRICING_CONFIG.laborCost),
+      profitMarginPercent: num(
+        obj.profitMarginPercent,
+        DEFAULT_PRICING_CONFIG.profitMarginPercent
+      ),
+    }
+  } catch {
+    return { ...DEFAULT_PRICING_CONFIG }
+  }
+}
+
+export function savePricingConfig(config: PricingConfig): void {
+  safeSetLocalItem(PRICING_CONFIG_STORAGE_KEY, JSON.stringify(config))
 }

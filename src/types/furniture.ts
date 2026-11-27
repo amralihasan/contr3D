@@ -161,6 +161,18 @@ export interface CustomTemplate {
   thumbnail?: string
 }
 
+export interface PricingConfig {
+  sheet18Price: number
+  sheet6Price: number
+  edgeBandingPricePerMeter: number
+  hingePrice: number
+  drawerSlidePrice: number
+  handlePrice: number
+  legsSetPrice: number
+  laborCost: number
+  profitMarginPercent: number
+}
+
 export interface SnapFeedback {
   x: boolean
   y: boolean

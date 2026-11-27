@@ -1,18 +1,32 @@
 import {
   AlertTriangle,
+  Calculator,
   Camera,
   ClipboardList,
   LayoutGrid,
   Printer,
+  RotateCcw,
   Scissors,
   X,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDesignStore } from '../../store/useDesignStore'
+import type { PricingConfig } from '../../types/furniture'
+import {
+  computeCostEstimate,
+  formatEgp,
+  type CostEstimateReport,
+  type PricingFieldKey,
+} from '../../utils/costCalculator'
 import { buildCutListReport } from '../../utils/cutList'
 import { computeOverallDimensions } from '../../utils/dimensions'
 import { DEFAULT_KERF_CM, optimizeSheetNesting } from '../../utils/sheetOptimizer'
+import {
+  DEFAULT_PRICING_CONFIG,
+  loadPricingConfig,
+  savePricingConfig,
+} from '../../utils/storage'
 import { SheetNestingDiagram } from './SheetNestingDiagram'
 
 interface WorkshopReportModalProps {
@@ -20,7 +34,74 @@ interface WorkshopReportModalProps {
   onClose: () => void
 }
 
-type ReportTab = 'cutlist' | 'nesting' | 'export'
+type ReportTab = 'cutlist' | 'nesting' | 'cost' | 'export'
+
+function PrintableCostSummary({ cost }: { cost: CostEstimateReport }) {
+  return (
+    <div className="mt-5">
+      <h4 className="mb-2 text-sm font-extrabold text-slate-900">
+        ملخص التكلفة التقديرية والتسعير
+      </h4>
+      <table className="mb-3 w-full border-collapse border border-slate-300 text-right text-xs">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="border border-slate-300 px-2.5 py-1.5">البند</th>
+            <th className="border border-slate-300 px-2.5 py-1.5">الكمية</th>
+            <th className="border border-slate-300 px-2.5 py-1.5">سعر الوحدة</th>
+            <th className="border border-slate-300 px-2.5 py-1.5">الإجمالي</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cost.lineItems
+            .filter((item) => item.quantity > 0)
+            .map((item) => (
+              <tr key={item.key}>
+                <td className="border border-slate-300 px-2.5 py-1.5 font-bold">
+                  {item.label}
+                </td>
+                <td className="tabular-nums border border-slate-300 px-2.5 py-1.5">
+                  {item.quantity} {item.unitLabel}
+                </td>
+                <td className="tabular-nums border border-slate-300 px-2.5 py-1.5">
+                  {formatEgp(item.unitPrice)}
+                </td>
+                <td className="tabular-nums border border-slate-300 px-2.5 py-1.5 font-bold">
+                  {formatEgp(item.totalCost)}
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+
+      <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-300 bg-slate-50 p-3 text-xs sm:grid-cols-4">
+        <div>
+          <span className="text-slate-600">تكلفة الخامات: </span>
+          <span className="tabular-nums font-extrabold text-slate-900">
+            {formatEgp(cost.materialsCost)}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-600">المصنعية والتجميع: </span>
+          <span className="tabular-nums font-extrabold text-slate-900">
+            {formatEgp(cost.laborCost)}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-600">التكلفة الإجمالية: </span>
+          <span className="tabular-nums font-extrabold text-slate-900">
+            {formatEgp(cost.totalCost)}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-600">سعر البيع ({cost.profitMarginPercent}%): </span>
+          <span className="tabular-nums font-extrabold text-emerald-800">
+            {formatEgp(cost.suggestedSellingPrice)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function captureViewportScreenshot(): string | null {
   try {
@@ -44,6 +125,8 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<ReportTab>('cutlist')
   const [kerfCm, setKerfCm] = useState<number>(DEFAULT_KERF_CM)
   const [respectWoodGrain, setRespectWoodGrain] = useState(false)
+  const [pricing, setPricing] = useState<PricingConfig>(() => loadPricingConfig())
+  const [includeCostInPrint, setIncludeCostInPrint] = useState(false)
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(() =>
     captureViewportScreenshot()
   )
@@ -54,7 +137,27 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
     () => optimizeSheetNesting(cutReport.pieces, kerfCm, respectWoodGrain),
     [cutReport.pieces, kerfCm, respectWoodGrain]
   )
+  const costReport = useMemo(
+    () => computeCostEstimate(panels, cutReport, nestingReport, pricing),
+    [panels, cutReport, nestingReport, pricing]
+  )
   const overall = useMemo(() => computeOverallDimensions(panels), [panels])
+
+  const updatePricingField = (field: PricingFieldKey, rawValue: string) => {
+    const parsed = Number.parseFloat(rawValue)
+    const safeVal = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+    setPricing((prev) => {
+      const next = { ...prev, [field]: safeVal }
+      savePricingConfig(next)
+      return next
+    })
+  }
+
+  const handleResetDefaultPricing = () => {
+    const next = { ...DEFAULT_PRICING_CONFIG }
+    setPricing(next)
+    savePricingConfig(next)
+  }
 
   const formattedDate = useMemo(() => {
     try {
@@ -121,31 +224,43 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* شريط التبويبات الثلاثة */}
-          <div className="grid grid-cols-3 gap-1.5 border-b border-slate-800 bg-slate-950/50 p-2.5">
+          {/* شريط التبويبات الأربعة */}
+          <div className="grid grid-cols-2 gap-1.5 border-b border-slate-800 bg-slate-950/50 p-2.5 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => setActiveTab('cutlist')}
-              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition sm:text-sm ${
+              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-bold transition sm:text-sm ${
                 activeTab === 'cutlist'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-300 hover:bg-slate-800'
               }`}
             >
-              <Scissors className="h-4 w-4" />
-              <span>1. كشف التقطيع وشريط الحرف</span>
+              <Scissors className="h-4 w-4 shrink-0" />
+              <span>1. كشف التقطيع</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('nesting')}
-              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition sm:text-sm ${
+              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-bold transition sm:text-sm ${
                 activeTab === 'nesting'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-300 hover:bg-slate-800'
               }`}
             >
-              <LayoutGrid className="h-4 w-4" />
-              <span>2. مخطط رص الألواح</span>
+              <LayoutGrid className="h-4 w-4 shrink-0" />
+              <span>2. رص الألواح</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('cost')}
+              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-bold transition sm:text-sm ${
+                activeTab === 'cost'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Calculator className="h-4 w-4 shrink-0" />
+              <span>3. التكلفة والتسعير</span>
             </button>
             <button
               type="button"
@@ -153,14 +268,14 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                 refreshScreenshot()
                 setActiveTab('export')
               }}
-              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold transition sm:text-sm ${
+              className={`flex h-11 items-center justify-center gap-1.5 rounded-xl px-2.5 text-xs font-bold transition sm:text-sm ${
                 activeTab === 'export'
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-300 hover:bg-slate-800'
               }`}
             >
-              <Printer className="h-4 w-4" />
-              <span>3. معاينة وتصدير PDF</span>
+              <Printer className="h-4 w-4 shrink-0" />
+              <span>4. معاينة PDF</span>
             </button>
           </div>
 
@@ -377,7 +492,160 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                   </div>
                 )}
 
-                {/* التبويب 3: معاينة وتصدير PDF */}
+                {/* التبويب 3: حاسبة التكلفة والتسعير */}
+                {activeTab === 'cost' && (
+                  <div className="space-y-5">
+                    {/* بطاقات ملخص التكلفة والتسعير */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="text-xs font-bold text-slate-400">تكلفة الخامات والإكسسوارات</div>
+                        <div className="tabular-nums mt-1 text-2xl font-extrabold text-sky-300">
+                          {formatEgp(costReport.materialsCost)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          خشب + شريط حرف + مفصلات ومجاري ومقابض ورجول
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4">
+                        <div className="text-xs font-bold text-amber-200">التكلفة الإجمالية</div>
+                        <div className="tabular-nums mt-1 text-2xl font-extrabold text-amber-300">
+                          {formatEgp(costReport.totalCost)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-amber-200/75">
+                          شاملة المصنعية والتجميع ({formatEgp(costReport.laborCost)})
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-500/45 bg-emerald-500/15 p-4">
+                        <div className="text-xs font-bold text-emerald-200">
+                          سعر البيع المقترح للعميل
+                        </div>
+                        <div className="tabular-nums mt-1 text-2xl font-extrabold text-emerald-300">
+                          {formatEgp(costReport.suggestedSellingPrice)}
+                        </div>
+                        <div className="tabular-nums mt-1 text-[11px] font-semibold text-emerald-200/80">
+                          صافي الربح ({costReport.profitMarginPercent}%):{' '}
+                          {formatEgp(costReport.profitAmount)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* خانات المصنعية وهامش الربح وخيار الطباعة */}
+                    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-3">
+                      <div>
+                        <label
+                          htmlFor="cost-labor-input"
+                          className="mb-1.5 block text-xs font-bold text-slate-300"
+                        >
+                          تكلفة المصنعية والتجميع (ج.م)
+                        </label>
+                        <input
+                          id="cost-labor-input"
+                          type="number"
+                          min={0}
+                          step={50}
+                          value={pricing.laborCost}
+                          onChange={(e) => updatePricingField('laborCost', e.target.value)}
+                          className="tabular-nums h-11 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-bold text-white outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cost-margin-input"
+                          className="mb-1.5 block text-xs font-bold text-slate-300"
+                        >
+                          نسبة هامش الربح (%)
+                        </label>
+                        <input
+                          id="cost-margin-input"
+                          type="number"
+                          min={0}
+                          max={300}
+                          step={1}
+                          value={pricing.profitMarginPercent}
+                          onChange={(e) =>
+                            updatePricingField('profitMarginPercent', e.target.value)
+                          }
+                          className="tabular-nums h-11 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-bold text-white outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-between gap-2">
+                        <label className="flex min-h-[44px] cursor-pointer select-none items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={includeCostInPrint}
+                            onChange={(e) => setIncludeCostInPrint(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500/40"
+                          />
+                          <span>تضمين التكلفة عند الطباعة</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={handleResetDefaultPricing}
+                          className="flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/60 px-3 text-[11px] font-bold text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>استعادة الأسعار الافتراضية</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* جدول تفصيلي لبنود التكلفة وأسعار الوحدات القابلة للتعديل */}
+                    <div className="overflow-x-auto rounded-2xl border border-slate-800">
+                      <table className="w-full min-w-[640px] text-right text-xs">
+                        <thead className="bg-slate-950 text-slate-300">
+                          <tr>
+                            <th className="px-3.5 py-3 font-bold">البند</th>
+                            <th className="px-3.5 py-3 font-bold">الكمية المحسوبة</th>
+                            <th className="px-3.5 py-3 font-bold">سعر الوحدة (ج.م)</th>
+                            <th className="px-3.5 py-3 font-bold">الإجمالي</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/80 bg-slate-900/60">
+                          {costReport.lineItems.map((item) => {
+                            const unused = item.quantity === 0
+                            return (
+                              <tr
+                                key={item.key}
+                                className={unused ? 'opacity-55 hover:opacity-90' : 'hover:bg-slate-800/40'}
+                              >
+                                <td className="px-3.5 py-2.5">
+                                  <div className="font-bold text-slate-100">{item.label}</div>
+                                  <div className="text-[11px] text-slate-400">{item.note}</div>
+                                </td>
+                                <td className="tabular-nums px-3.5 py-2.5 font-extrabold text-amber-200">
+                                  {item.quantity} {item.unitLabel}
+                                </td>
+                                <td className="px-3.5 py-2.5">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={item.priceField === 'edgeBandingPricePerMeter' ? 1 : 10}
+                                    value={item.unitPrice}
+                                    onChange={(e) =>
+                                      updatePricingField(item.priceField, e.target.value)
+                                    }
+                                    className="tabular-nums h-10 w-28 rounded-xl border border-slate-700 bg-slate-950 px-2.5 text-center font-bold text-white outline-none focus:border-amber-500"
+                                    aria-label={`سعر ${item.label}`}
+                                  />
+                                </td>
+                                <td className="tabular-nums px-3.5 py-2.5 font-extrabold text-white">
+                                  {formatEgp(item.totalCost)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* التبويب 4: معاينة وتصدير PDF */}
                 {activeTab === 'export' && (
                   <div className="space-y-5">
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
@@ -389,7 +657,16 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                           يتضمن لقطة 3D للتصميم والمقاسات الإجمالية وجدول التقطيع ومخططات الرص.
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 px-3 text-xs font-bold text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={includeCostInPrint}
+                            onChange={(e) => setIncludeCostInPrint(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-amber-500"
+                          />
+                          <span>تضمين التكلفة عند الطباعة</span>
+                        </label>
                         <button
                           type="button"
                           onClick={refreshScreenshot}
@@ -499,6 +776,8 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                           )}
                         </div>
                       </div>
+
+                      {includeCostInPrint && <PrintableCostSummary cost={costReport} />}
                     </div>
                   </div>
                 )}
@@ -608,6 +887,8 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
               ))
             )}
           </div>
+
+          {includeCostInPrint && <PrintableCostSummary cost={costReport} />}
         </div>,
         document.body
       )}
