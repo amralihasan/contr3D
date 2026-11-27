@@ -39,7 +39,6 @@ import {
   deepClone,
   deleteCustomTemplate,
   deleteSavedDesign,
-  loadAutosave,
   loadCustomTemplates,
   loadSavedDesigns,
   loadUiPreferences,
@@ -168,43 +167,14 @@ function rotateEulerWorld90(rotation: Vec3, axis: Axis): Vec3 {
   return [snapAngle(nextEuler.x), snapAngle(nextEuler.y), snapAngle(nextEuler.z)]
 }
 
-function getInitialData() {
-  try {
-    const autosave = loadAutosave()
-    if (autosave && (autosave.panels.length > 0 || autosave.guides.length > 0)) {
-      return {
-        panels: sanitizePanels(autosave.panels),
-        guides: sanitizeGuides(autosave.guides),
-        designName: autosave.designName || 'وحدة كونتر أساسية',
-        designId: autosave.designId ?? null,
-      }
-    }
-  } catch {
-    // fallback إلى التصميم الافتراضي عند تعذر القراءة
-  }
-  return {
-    panels: createStarterPanels(),
-    guides: [] as GuideLine[],
-    designName: 'وحدة كونتر أساسية',
-    designId: null,
-  }
-}
-
 function computeDesignSignature(panels: FurniturePanel[], guides: GuideLine[]): string {
   return JSON.stringify({ panels, guides })
 }
 
-const initial = getInitialData()
+// يبدأ التطبيق دائماً بمشهد فارغ دون استعادة تلقائية لآخر مسودة، مع الحفاظ على التصاميم والقوالب المحفوظة
+const EMPTY_DESIGN_SIGNATURE = computeDesignSignature([], [])
 const initialUiPrefs = loadUiPreferences()
 const initialSavedDesigns = loadSavedDesigns()
-const matchedInitialSaved = initial.designId
-  ? initialSavedDesigns.find((d) => d.id === initial.designId)
-  : undefined
-const initialSavedSignature = matchedInitialSaved
-  ? computeDesignSignature(matchedInitialSaved.panels, matchedInitialSaved.guides ?? [])
-  : computeDesignSignature(initial.panels, initial.guides)
-const initialHasUnsavedChanges =
-  computeDesignSignature(initial.panels, initial.guides) !== initialSavedSignature
 
 export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch'
 export type RenderMode = 'normal' | 'sketch'
@@ -414,8 +384,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   }
 
   return {
-  panels: initial.panels,
-  guides: initial.guides,
+  panels: [],
+  guides: [],
   guidesVisible: true,
   selectedGuideId: null,
 
@@ -462,13 +432,13 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   future: [],
   dragSnapshot: null,
 
-  currentDesignId: initial.designId,
-  currentDesignName: initial.designName,
+  currentDesignId: null,
+  currentDesignName: 'تصميم جديد',
   savedDesigns: initialSavedDesigns,
   customTemplates: loadCustomTemplates(),
   lastSavedAt: null,
-  savedSignature: initialSavedSignature,
-  hasUnsavedChanges: initialHasUnsavedChanges,
+  savedSignature: EMPTY_DESIGN_SIGNATURE,
+  hasUnsavedChanges: false,
 
   selectPanel: (id, additive = false) => {
     const { focusMode, partsSidebarOpen } = get()
