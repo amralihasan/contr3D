@@ -3,24 +3,31 @@ import { useDesignStore } from '../../store/useDesignStore'
 
 export function WorkspaceGrid() {
   const exportMode = useDesignStore((s) => s.exportMode)
+  const renderMode = useDesignStore((s) => s.renderMode)
+  const isSketch = renderMode === 'sketch'
   const isCleanExport = exportMode === 'clean' || exportMode === 'three_angles'
   const isTransparentExport = exportMode === 'transparent'
 
   return (
     <>
-      {/* الخلفية والضباب حسب الوضع العادي أو وضع تصدير الصورة */}
+      {/* الخلفية والضباب حسب الوضع العادي أو وضع التصدير / الرسم الهندسي */}
       {!isTransparentExport && (
-        <color attach="background" args={[isCleanExport ? '#f1f5f9' : '#0f172a']} />
+        <color
+          attach="background"
+          args={[isSketch ? '#ffffff' : isCleanExport ? '#f1f5f9' : '#0f172a']}
+        />
       )}
-      {!exportMode && <fog attach="fog" args={['#0f172a', 380, 760]} />}
+      {!exportMode && !isSketch && <fog attach="fog" args={['#0f172a', 380, 760]} />}
 
-      <ambientLight intensity={isCleanExport ? 0.55 : 0.45} />
-      <hemisphereLight args={['#f8fafc', '#1e293b', isCleanExport ? 0.65 : 0.55]} />
+      <ambientLight intensity={isSketch ? 0.72 : isCleanExport ? 0.55 : 0.45} />
+      <hemisphereLight
+        args={['#f8fafc', isSketch ? '#cbd5e1' : '#1e293b', isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55]}
+      />
 
       <directionalLight
         position={[140, 220, 160]}
-        intensity={1.35}
-        castShadow
+        intensity={isSketch ? 0.75 : 1.35}
+        castShadow={!isSketch}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
         shadow-camera-near={10}
@@ -31,7 +38,7 @@ export function WorkspaceGrid() {
         shadow-camera-bottom={-220}
       />
 
-      <directionalLight position={[-140, 110, -120]} intensity={0.4} color="#cbd5e1" />
+      <directionalLight position={[-140, 110, -120]} intensity={isSketch ? 0.35 : 0.4} color="#cbd5e1" />
 
       {/* بيئة إضاءة محلية بدون تحميل ملفات خارجية */}
       <Environment resolution={256}>
@@ -60,17 +67,19 @@ export function WorkspaceGrid() {
         </group>
       </Environment>
 
-      {/* أرضية استقبال الظلال عند Y = 0 */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-        <planeGeometry args={[1200, 1200]} />
-        <shadowMaterial
-          transparent
-          opacity={isCleanExport ? 0.18 : isTransparentExport ? 0.24 : 0.34}
-        />
-      </mesh>
+      {/* أرضية استقبال الظلال (مخفية في وضع الرسم الهندسي لورقة بيضاء نقية) */}
+      {!isSketch && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+          <planeGeometry args={[1200, 1200]} />
+          <shadowMaterial
+            transparent
+            opacity={isCleanExport ? 0.18 : isTransparentExport ? 0.24 : 0.34}
+          />
+        </mesh>
+      )}
 
-      {/* إخفاء الشبكة الأرضية مؤقتاً أثناء تصدير الصورة */}
-      {!exportMode && (
+      {/* إخفاء الشبكة الأرضية مؤقتاً أثناء تصدير الصورة أو الرسم الهندسي */}
+      {!exportMode && !isSketch && (
         <Grid
           position={[0, 0.01, 0]}
           args={[600, 600]}

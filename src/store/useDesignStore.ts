@@ -174,7 +174,8 @@ function getInitialData() {
 const initial = getInitialData()
 const initialUiPrefs = loadUiPreferences()
 
-export type ImageExportMode = 'clean' | 'transparent' | 'three_angles'
+export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch'
+export type RenderMode = 'normal' | 'sketch'
 
 interface DesignState {
   panels: FurniturePanel[]
@@ -207,6 +208,7 @@ interface DesignState {
   isDraggingHuman: boolean
   isExporting: boolean
   exportMode: ImageExportMode | null
+  renderMode: RenderMode
   exportRequestTick: number
   partsSidebarOpen: boolean
   propsSidebarOpen: boolean
@@ -357,6 +359,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   isDraggingHuman: false,
   isExporting: false,
   exportMode: null,
+  renderMode: 'normal',
   exportRequestTick: 0,
   partsSidebarOpen: initialUiPrefs.partsSidebarOpen,
   propsSidebarOpen: initialUiPrefs.propsSidebarOpen,
@@ -642,6 +645,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set((state) => ({
       isExporting: true,
       exportMode: mode,
+      renderMode: mode === 'sketch' ? 'sketch' : 'normal',
       exportRequestTick: state.exportRequestTick + 1,
     })),
 
@@ -649,6 +653,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       isExporting: false,
       exportMode: null,
+      renderMode: 'normal',
       statusToast: success
         ? (customMessage ?? 'تم حفظ الصورة بنجاح')
         : 'تعذر تصدير الصورة',

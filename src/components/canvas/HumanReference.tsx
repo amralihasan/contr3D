@@ -14,6 +14,7 @@ const BASE_ADULT_HEIGHT_CM = 175
  */
 export function HumanReference() {
   const showHumanReference = useDesignStore((s) => s.showHumanReference)
+  const renderMode = useDesignStore((s) => s.renderMode)
   const humanScalePreset = useDesignStore((s) => s.humanScalePreset)
   const humanPosition = useDesignStore((s) => s.humanPosition)
   const toolMode = useDesignStore((s) => s.toolMode)
@@ -67,7 +68,7 @@ export function HumanReference() {
     }
   }, [camera, gl, floorPlane, setHumanPosition, setIsDraggingHuman])
 
-  if (!showHumanReference) return null
+  if (!showHumanReference || renderMode === 'sketch') return null
 
   const targetHeight = HUMAN_SCALE_HEIGHTS_CM[humanScalePreset]
   const scale = targetHeight / BASE_ADULT_HEIGHT_CM

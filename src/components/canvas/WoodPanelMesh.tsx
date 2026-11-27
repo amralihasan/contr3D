@@ -28,6 +28,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
 
   const selectPanel = useDesignStore((s) => s.selectPanel)
   const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
+  const renderMode = useDesignStore((s) => s.renderMode)
+  const isSketch = renderMode === 'sketch'
   const isSelected = useDesignStore(
     (s) =>
       !s.isExporting &&
@@ -172,9 +174,9 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     }
   }
 
-  const edgeColor = isSelected ? '#fbbf24' : '#0f172a'
-  const edgeWidth = isSelected ? 2.6 : 0.8
-  const edgeOpacity = isSelected ? 1 : 0.22
+  const edgeColor = isSketch ? '#1e293b' : isSelected ? '#fbbf24' : '#0f172a'
+  const edgeWidth = isSketch ? 1.6 : isSelected ? 2.6 : 0.8
+  const edgeOpacity = isSketch ? 1 : isSelected ? 1 : 0.22
 
   // إزاحة خفيفة متدرجة حسب نوع العنصر لمنع التداخل البصري (Z-Fighting) عند التقاء الأسطح المتطابقة
   const polyOffsetByRole: Record<FurniturePanel['role'], number> = {
@@ -192,19 +194,37 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     custom: 2,
   }
   const polyOffset = polyOffsetByRole[panel.role] ?? 1
-  const materialKey = `${panel.materialId}-${texture ? 'tex' : 'solid'}`
+  const materialKey = isSketch
+    ? 'sketch-mat'
+    : `${panel.materialId}-${texture ? 'tex' : 'solid'}`
 
-  const mainMaterialProps = {
-    color: texture ? '#ffffff' : matSpec.color,
-    map: texture ?? null,
-    roughness: matSpec.roughness,
-    metalness: matSpec.metalness,
-    emissive: '#000000',
-    emissiveIntensity: 0,
-    polygonOffset: true,
-    polygonOffsetFactor: polyOffset,
-    polygonOffsetUnits: polyOffset,
-  }
+  const mainMaterialProps = isSketch
+    ? {
+        color: '#f8fafc',
+        map: null,
+        roughness: 0.9,
+        metalness: 0.0,
+        emissive: '#000000',
+        emissiveIntensity: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: polyOffset,
+        polygonOffsetUnits: polyOffset,
+      }
+    : {
+        color: texture ? '#ffffff' : matSpec.color,
+        map: texture ?? null,
+        roughness: matSpec.roughness,
+        metalness: matSpec.metalness,
+        emissive: '#000000',
+        emissiveIntensity: 0,
+        polygonOffset: true,
+        polygonOffsetFactor: polyOffset,
+        polygonOffsetUnits: polyOffset,
+      }
+
+  const sketchSubEdges = isSketch ? (
+    <Edges threshold={15} color="#1e293b" lineWidth={1.5} />
+  ) : null
 
   const renderContent = () => {
     const { width, height, depth } = panel.dimensions
@@ -247,7 +267,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 onClick={handleClick}
               >
                 <boxGeometry args={[0.9, Math.min(14, effH * 0.28), 1.4]} />
-                <meshStandardMaterial color="#cbd5e1" metalness={0.75} roughness={0.28} />
+                <meshStandardMaterial
+                  color={isSketch ? '#f8fafc' : '#cbd5e1'}
+                  metalness={isSketch ? 0 : 0.75}
+                  roughness={isSketch ? 0.9 : 0.28}
+                />
+                {sketchSubEdges}
               </mesh>
             )}
           </group>
@@ -288,7 +313,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[1.1, Math.min(18, effH * 0.32), 0.6]} />
-              <meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.32} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#94a3b8'}
+                metalness={isSketch ? 0 : 0.7}
+                roughness={isSketch ? 0.9 : 0.32}
+              />
+              {sketchSubEdges}
             </mesh>
           )}
         </group>
@@ -335,7 +365,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[Math.min(16, effW * 0.32), 0.9, 1.4]} />
-              <meshStandardMaterial color="#cbd5e1" metalness={0.75} roughness={0.28} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#cbd5e1'}
+                metalness={isSketch ? 0 : 0.75}
+                roughness={isSketch ? 0.9 : 0.28}
+              />
+              {sketchSubEdges}
             </mesh>
           )}
 
@@ -349,7 +384,11 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[boxWall, boxH, boxD]} />
-              <meshStandardMaterial color="#dfd6c7" roughness={0.65} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : 0.65}
+              />
+              {sketchSubEdges}
             </mesh>
             {/* جنب أيمن */}
             <mesh
@@ -359,7 +398,11 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[boxWall, boxH, boxD]} />
-              <meshStandardMaterial color="#dfd6c7" roughness={0.65} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : 0.65}
+              />
+              {sketchSubEdges}
             </mesh>
             {/* ضهر الدرج */}
             <mesh
@@ -369,7 +412,11 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[Math.max(1, boxW - boxWall * 2), boxH, boxWall]} />
-              <meshStandardMaterial color="#dfd6c7" roughness={0.65} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : 0.65}
+              />
+              {sketchSubEdges}
             </mesh>
             {/* قاع الدرج */}
             <mesh
@@ -379,7 +426,11 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               onClick={handleClick}
             >
               <boxGeometry args={[Math.max(1, boxW - boxWall * 2), 0.8, boxD]} />
-              <meshStandardMaterial color="#cfc4b2" roughness={0.7} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#cfc4b2'}
+                roughness={isSketch ? 0.9 : 0.7}
+              />
+              {sketchSubEdges}
             </mesh>
           </group>
         </group>
@@ -454,7 +505,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 onClick={handleClick}
               >
                 <boxGeometry args={[5, plateH, 5]} />
-                <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.45} />
+                <meshStandardMaterial
+                  color={isSketch ? '#f8fafc' : '#334155'}
+                  metalness={isSketch ? 0 : 0.5}
+                  roughness={isSketch ? 0.9 : 0.45}
+                />
+                {sketchSubEdges}
               </mesh>
               {/* الرجل الخشبية المايلة */}
               <mesh
@@ -466,6 +522,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               >
                 <cylinderGeometry args={[legRadiusTop, legRadiusBot, legH, 16]} />
                 <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
+                {sketchSubEdges}
               </mesh>
             </group>
           ))}
@@ -508,7 +565,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 onClick={handleClick}
               >
                 <boxGeometry args={[postSize + 2, plateH, postSize + 2]} />
-                <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.3} />
+                <meshStandardMaterial
+                  color={isSketch ? '#f8fafc' : '#334155'}
+                  metalness={isSketch ? 0 : 0.8}
+                  roughness={isSketch ? 0.9 : 0.3}
+                />
+                {sketchSubEdges}
               </mesh>
               {/* عمود الرجل المعدني */}
               <mesh
@@ -519,10 +581,10 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               >
                 <boxGeometry args={[postSize, postH, postSize]} />
                 <meshStandardMaterial
-                  key={panel.materialId}
-                  color={matSpec.color}
-                  metalness={0.75}
-                  roughness={0.32}
+                  key={isSketch ? 'sketch-metal' : panel.materialId}
+                  color={isSketch ? '#f8fafc' : matSpec.color}
+                  metalness={isSketch ? 0 : 0.75}
+                  roughness={isSketch ? 0.9 : 0.32}
                   polygonOffset
                   polygonOffsetFactor={polyOffset}
                   polygonOffsetUnits={polyOffset}
@@ -537,7 +599,11 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 onClick={handleClick}
               >
                 <cylinderGeometry args={[postSize * 0.55, postSize * 0.6, glideH, 12]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.8} />
+                <meshStandardMaterial
+                  color={isSketch ? '#f8fafc' : '#0f172a'}
+                  roughness={isSketch ? 0.9 : 0.8}
+                />
+                {sketchSubEdges}
               </mesh>
             </group>
           ))}

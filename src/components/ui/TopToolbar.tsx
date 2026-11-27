@@ -8,6 +8,7 @@ import {
   DraftingCompass,
   Eye,
   EyeOff,
+  FileSpreadsheet,
   ImageDown,
   Images,
   Layers,
@@ -315,7 +316,7 @@ export function TopToolbar({
           <span className="hidden xl:inline">تقرير الورشة</span>
         </button>
 
-        {/* تصدير صورة (3 خيارات) */}
+        {/* تصدير صورة (4 خيارات) */}
         <div className="relative" ref={exportMenuRef}>
           <button
             type="button"
@@ -378,6 +379,23 @@ export function TopToolbar({
                   <div>تصدير 3 زوايا تلقائياً</div>
                   <div className="text-[10px] font-normal text-slate-400">
                     أمامي + جانبي + 3D دفعة واحدة
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  triggerExportImage('sketch')
+                }}
+                className="mt-1 flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-right text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+              >
+                <FileSpreadsheet className="h-4 w-4 shrink-0 text-slate-200" />
+                <div>
+                  <div>رسم هندسي بالمقاسات (أبيض وأسود)</div>
+                  <div className="text-[10px] font-normal text-slate-400">
+                    اسكتش تنفيذي بخطوط وأسهم الأبعاد
                   </div>
                 </div>
               </button>

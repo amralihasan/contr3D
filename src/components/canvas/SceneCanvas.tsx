@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole, type CameraPreset } from '../../types/furniture'
+import { exportSketchWithDimensions } from '../../utils/sketchExport'
 import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
@@ -115,6 +116,37 @@ function ExportCaptureController() {
           const prevFog = scene.fog
           const prevClearColor = gl.getClearColor(new THREE.Color())
           const prevClearAlpha = gl.getClearAlpha()
+
+          if (mode === 'sketch') {
+            scene.background = new THREE.Color('#ffffff')
+            scene.fog = null
+            gl.setClearColor(0xffffff, 1)
+            gl.render(scene, camera)
+
+            const visibleForSketch = state.interfacesHidden
+              ? state.panels.filter((p) => !isInterfaceRole(p.role))
+              : state.panels
+
+            const sketchUrl = exportSketchWithDimensions(
+              gl.domElement,
+              camera,
+              visibleForSketch,
+              state.currentDesignName
+            )
+
+            scene.background = prevBg
+            scene.fog = prevFog
+            gl.setClearColor(prevClearColor, prevClearAlpha)
+
+            triggerPngDownload(
+              sketchUrl,
+              buildExportFilename(state.currentDesignName, 'رسم-هندسي')
+            )
+            if (!cancelled) {
+              finishExportImage(true, 'تم تصدير الرسم الهندسي بالمقاسات بنجاح')
+            }
+            return
+          }
 
           if (mode === 'transparent') {
             scene.background = null
