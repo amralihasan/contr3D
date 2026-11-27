@@ -38,21 +38,28 @@ export function DimensionsOverlay3D() {
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
   const showDimensions = useDesignStore((s) => s.showDimensions)
+  const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
 
   const visiblePanels = useMemo(
     () => (interfacesHidden ? panels.filter((p) => !isInterfaceRole(p.role)) : panels),
     [panels, interfacesHidden]
   )
 
-  const overall = useMemo(() => computeOverallDimensions(visiblePanels), [visiblePanels])
+  const overall = useMemo(
+    () => (isDraggingGizmo ? null : computeOverallDimensions(visiblePanels)),
+    [visiblePanels, isDraggingGizmo]
+  )
 
   const selectedPanel = visiblePanels.find((p) => p.id === selectedPanelId) ?? null
   const clearances = useMemo(
-    () => (selectedPanel ? computeSelectedClearances(selectedPanel, visiblePanels) : []),
-    [selectedPanel, visiblePanels]
+    () =>
+      !isDraggingGizmo && selectedPanel
+        ? computeSelectedClearances(selectedPanel, visiblePanels)
+        : [],
+    [selectedPanel, visiblePanels, isDraggingGizmo]
   )
 
-  if (!showDimensions || !overall) return null
+  if (!showDimensions || !overall || isDraggingGizmo) return null
 
   const offset = 14
   const floorY = 0.6

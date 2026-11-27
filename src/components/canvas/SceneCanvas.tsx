@@ -15,7 +15,6 @@ import { WorkspaceGrid } from './WorkspaceGrid'
 export function SceneCanvas() {
   const panels = useDesignStore((s) => s.panels)
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
-  const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
@@ -78,7 +77,6 @@ export function SceneCanvas() {
             <WoodPanelMesh
               key={panel.id}
               panel={panel}
-              isSelected={toolMode === 'select' && selectedPanelIds.includes(panel.id)}
               registerObject={registerObject}
               tapeHandlersRef={tapeHandlersRef}
             />

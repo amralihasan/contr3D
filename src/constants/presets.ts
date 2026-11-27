@@ -172,7 +172,7 @@ export const CLEARANCE_PRESETS = [
 ] as const
 
 export const GRID_STEP_CM = 0.5
-export const SNAP_THRESHOLD_CM = 2.5
+export const SNAP_THRESHOLD_CM = 1.2
 export const MIN_PANEL_DIM_CM = 0.4
 export const MAX_PANEL_DIM_CM = 400
 export const MIN_CLEARANCE_CM = 0

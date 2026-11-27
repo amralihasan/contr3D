@@ -82,42 +82,40 @@ export interface SnapResult {
 }
 
 /**
- * يحسب الموضع الجديد للوح مع المغناطيس الذكي:
- * 1) الالتصاق بسطح الأرض (Y = 0) ومنع الغوص تحت الأرض
- * 2) الالتصاق بالخطوط الإرشادية (العلامات) من الحواف أو المنتصف
- * 3) الالتصاق بأسطح وحواف الألواح القريبة لمنع التداخل أو الفراغات العشوائية
- * 4) التحرك بخطوات دقيقة (0.5 سم) للمحاور التي لم تلتصق بسطح أو علام
+ * حساب سريع للموضع الملتقط باستخدام حدود محسوبة مسبقاً (بدون تخصيص ذاكرة في كل إطار سحب)
+ * وعند إيقاف المغناطيس تكون الحركة حرة وناعمة تماماً بدون أي تقريب (Grid Snap)
  */
-export function computeSnappedPosition(
-  movingPanel: FurniturePanel,
+export function computeSnappedPositionFromBoxes(
+  halfExtents: Vec3,
   proposedPosition: Vec3,
-  otherPanels: FurniturePanel[],
+  otherBoxes: WorldBox[],
   snappingEnabled: boolean,
   guides: GuideLine[] = []
 ): SnapResult {
-  const [hx, hy, hz] = getWorldHalfExtents(movingPanel.dimensions, movingPanel.rotation)
+  const [hx, hy, hz] = halfExtents
   let x = proposedPosition[0]
   let y = proposedPosition[1]
   let z = proposedPosition[2]
 
-  // منع نزول أي لوح أسفل مستوى الأرضية Y = 0
+  // منع نزول أي لوح أسفل مستوى الأرضية Y = 0 في جميع الحالات
   if (y < hy) {
     y = hy
   }
 
+  // حركة حرة وناعمة تماماً بدون تقريب عند إيقاف المغناطيس
   if (!snappingEnabled) {
     return {
-      position: [roundTo(x, 2), roundTo(y, 2), roundTo(z, 2)],
-      feedback: { x: false, y: false, z: false, floor: Math.abs(y - hy) < 0.01, guide: false },
+      position: [x, y, z],
+      feedback: { x: false, y: false, z: false, floor: false, guide: false },
     }
   }
 
   const feedback: SnapFeedback = { x: false, y: false, z: false, floor: false, guide: false }
-  const proximityMargin = 15 // سم لاعتبار الألواح قريبة من بعضها في المحاور المتعامدة
-  const otherBoxes = otherPanels.map(getPanelWorldBox)
+  const proximityMargin = 15
+  const threshold = SNAP_THRESHOLD_CM
 
   // --- المحور Y (الأرضية + العلامات + الألواح الأخرى) ---
-  let bestYDist = SNAP_THRESHOLD_CM
+  let bestYDist = threshold
   let bestY = y
 
   const floorDist = Math.abs(y - hy)
@@ -128,18 +126,13 @@ export function computeSnappedPosition(
     feedback.floor = true
   }
 
-  // علامات المحور Y
   for (const g of guides) {
     if (g.offsetAxis !== 'y') continue
-    const candidates = [
-      g.worldCoord + hy, // أسفل اللوح على العلام
-      g.worldCoord - hy, // أعلى اللوح على العلام
-      g.worldCoord, // منتصف اللوح على العلام
-    ]
+    const candidates = [g.worldCoord + hy, g.worldCoord - hy, g.worldCoord]
     for (const candidate of candidates) {
       if (candidate < hy - 0.001) continue
       const dist = Math.abs(y - candidate)
-      if (dist <= bestYDist) {
+      if (dist < bestYDist) {
         bestYDist = dist
         bestY = candidate
         feedback.y = true
@@ -156,10 +149,10 @@ export function computeSnappedPosition(
     if (!nearXZ) continue
 
     const candidates = [
-      ob.maxY + hy, // أسفل اللوح المتحرك على سطح اللوح الآخر
-      ob.minY - hy, // أعلى اللوح المتحرك أسفل اللوح الآخر
-      ob.minY + hy, // محاذاة القاع
-      ob.maxY - hy, // محاذاة السطح العلوي
+      ob.maxY + hy,
+      ob.minY - hy,
+      ob.minY + hy,
+      ob.maxY - hy,
     ]
 
     for (const candidate of candidates) {
@@ -179,7 +172,7 @@ export function computeSnappedPosition(
   if (y < hy) y = hy
 
   // --- المحور X (العلامات + الألواح الأخرى) ---
-  let bestXDist = SNAP_THRESHOLD_CM
+  let bestXDist = threshold
   let bestX = x
   let snappedXToGuide = false
 
@@ -188,7 +181,7 @@ export function computeSnappedPosition(
     const candidates = [g.worldCoord + hx, g.worldCoord - hx, g.worldCoord]
     for (const candidate of candidates) {
       const dist = Math.abs(x - candidate)
-      if (dist <= bestXDist) {
+      if (dist < bestXDist) {
         bestXDist = dist
         bestX = candidate
         feedback.x = true
@@ -203,13 +196,7 @@ export function computeSnappedPosition(
       rangesNear(z - hz, z + hz, ob.minZ, ob.maxZ, proximityMargin)
     if (!nearYZ) continue
 
-    const candidates = [
-      ob.maxX + hx,
-      ob.minX - hx,
-      ob.minX + hx,
-      ob.maxX - hx,
-      ob.cx,
-    ]
+    const candidates = [ob.maxX + hx, ob.minX - hx, ob.minX + hx, ob.maxX - hx, ob.cx]
 
     for (const candidate of candidates) {
       const dist = Math.abs(x - candidate)
@@ -226,7 +213,7 @@ export function computeSnappedPosition(
   x = feedback.x ? roundTo(bestX, 3) : snapToGridEdge(x, hx, GRID_STEP_CM)
 
   // --- المحور Z (العلامات + الألواح الأخرى) ---
-  let bestZDist = SNAP_THRESHOLD_CM
+  let bestZDist = threshold
   let bestZ = z
   let snappedZToGuide = false
 
@@ -235,7 +222,7 @@ export function computeSnappedPosition(
     const candidates = [g.worldCoord + hz, g.worldCoord - hz, g.worldCoord]
     for (const candidate of candidates) {
       const dist = Math.abs(z - candidate)
-      if (dist <= bestZDist) {
+      if (dist < bestZDist) {
         bestZDist = dist
         bestZ = candidate
         feedback.z = true
@@ -250,13 +237,7 @@ export function computeSnappedPosition(
       rangesNear(y - hy, y + hy, ob.minY, ob.maxY, proximityMargin)
     if (!nearXY) continue
 
-    const candidates = [
-      ob.maxZ + hz,
-      ob.minZ - hz,
-      ob.minZ + hz,
-      ob.maxZ - hz,
-      ob.cz,
-    ]
+    const candidates = [ob.maxZ + hz, ob.minZ - hz, ob.minZ + hz, ob.maxZ - hz, ob.cz]
 
     for (const candidate of candidates) {
       const dist = Math.abs(z - candidate)
@@ -276,6 +257,24 @@ export function computeSnappedPosition(
     position: [roundTo(x, 2), roundTo(y, 2), roundTo(z, 2)],
     feedback,
   }
+}
+
+export function computeSnappedPosition(
+  movingPanel: FurniturePanel,
+  proposedPosition: Vec3,
+  otherPanels: FurniturePanel[],
+  snappingEnabled: boolean,
+  guides: GuideLine[] = []
+): SnapResult {
+  const halfExtents = getWorldHalfExtents(movingPanel.dimensions, movingPanel.rotation)
+  const otherBoxes = otherPanels.map(getPanelWorldBox)
+  return computeSnappedPositionFromBoxes(
+    halfExtents,
+    proposedPosition,
+    otherBoxes,
+    snappingEnabled,
+    guides
+  )
 }
 
 /**

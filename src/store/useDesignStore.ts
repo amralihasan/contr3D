@@ -268,8 +268,8 @@ interface DesignState {
 
   // Gizmo transform lifecycle
   beginTransformDrag: () => void
-  movePanelLive: (id: string, position: Vec3, feedback: SnapFeedback) => void
-  endTransformDrag: () => void
+  setSnapFeedback: (feedback: SnapFeedback) => void
+  endTransformDrag: (finalMove?: { id: string; position: Vec3 }) => void
 
   // History
   undo: () => void
@@ -1029,23 +1029,36 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     })
   },
 
-  movePanelLive: (id, position, feedback) => {
-    set((state) => ({
-      panels: state.panels.map((p) => (p.id === id ? { ...p, position } : p)),
-      snapFeedback: feedback,
-    }))
+  setSnapFeedback: (feedback) => {
+    const prev = get().snapFeedback
+    if (
+      prev.x === feedback.x &&
+      prev.y === feedback.y &&
+      prev.z === feedback.z &&
+      prev.floor === feedback.floor &&
+      Boolean(prev.guide) === Boolean(feedback.guide)
+    ) {
+      return
+    }
+    set({ snapFeedback: feedback })
   },
 
-  endTransformDrag: () => {
+  endTransformDrag: (finalMove) => {
     const { dragSnapshot, panels, guides, past, currentDesignName, currentDesignId } = get()
+    const nextPanels = finalMove
+      ? panels.map((p) => (p.id === finalMove.id ? { ...p, position: finalMove.position } : p))
+      : panels
+
     const changed =
-      dragSnapshot !== null && JSON.stringify(dragSnapshot.panels) !== JSON.stringify(panels)
+      dragSnapshot !== null &&
+      JSON.stringify(dragSnapshot.panels) !== JSON.stringify(nextPanels)
 
     if (changed) {
-      saveAutosave(panels, guides, currentDesignName, currentDesignId)
+      saveAutosave(nextPanels, guides, currentDesignName, currentDesignId)
     }
 
     set({
+      panels: nextPanels,
       isDraggingGizmo: false,
       dragSnapshot: null,
       snapFeedback: { x: false, y: false, z: false, floor: false, guide: false },

@@ -1,6 +1,6 @@
 import { Edges } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import { memo, useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { MATERIALS } from '../../constants/materials'
 import { useDesignStore } from '../../store/useDesignStore'
@@ -10,14 +10,12 @@ import type { TapePanelHandlers } from './TapeMeasureTool'
 
 interface WoodPanelMeshProps {
   panel: FurniturePanel
-  isSelected: boolean
   registerObject: (id: string, obj: THREE.Object3D | null) => void
   tapeHandlersRef: MutableRefObject<TapePanelHandlers | null>
 }
 
-export function WoodPanelMesh({
+export const WoodPanelMesh = memo(function WoodPanelMesh({
   panel,
-  isSelected,
   registerObject,
   tapeHandlersRef,
 }: WoodPanelMeshProps) {
@@ -26,6 +24,9 @@ export function WoodPanelMesh({
 
   const selectPanel = useDesignStore((s) => s.selectPanel)
   const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
+  const isSelected = useDesignStore(
+    (s) => s.toolMode === 'select' && s.selectedPanelIds.includes(panel.id)
+  )
 
   const matSpec = MATERIALS[panel.materialId]
   const texture = useMemo(() => {
@@ -524,4 +525,4 @@ export function WoodPanelMesh({
       {renderContent()}
     </group>
   )
-}
+})

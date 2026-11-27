@@ -1,8 +1,15 @@
 import { TransformControls } from '@react-three/drei'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type * as THREE from 'three'
 import { useDesignStore } from '../../store/useDesignStore'
-import { computeSnappedPosition } from '../../utils/snapping'
+import type { GuideLine, Vec3 } from '../../types/furniture'
+import {
+  computeSnappedPositionFromBoxes,
+  getPanelWorldBox,
+  getWorldHalfExtents,
+  roundTo,
+  type WorldBox,
+} from '../../utils/snapping'
 
 interface PanelTransformGizmoProps {
   selectedObject: THREE.Object3D | null
@@ -10,49 +17,88 @@ interface PanelTransformGizmoProps {
 
 export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps) {
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
-  const panels = useDesignStore((s) => s.panels)
   const toolMode = useDesignStore((s) => s.toolMode)
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
   const beginTransformDrag = useDesignStore((s) => s.beginTransformDrag)
-  const movePanelLive = useDesignStore((s) => s.movePanelLive)
+  const setSnapFeedback = useDesignStore((s) => s.setSnapFeedback)
   const endTransformDrag = useDesignStore((s) => s.endTransformDrag)
 
-  const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
+  // بيانات محسوبة مسبقاً عند بدء السحب لمنع أي عمليات تخصيص أو إعادة رسم أثناء التحريك
+  const activePanelIdRef = useRef<string | null>(null)
+  const halfExtentsRef = useRef<Vec3>([1, 1, 1])
+  const otherBoxesRef = useRef<WorldBox[]>([])
+  const activeGuidesRef = useRef<GuideLine[]>([])
+
+  const handleMouseDown = useCallback(() => {
+    if (!selectedPanelId) return
+    const state = useDesignStore.getState()
+    const panel = state.panels.find((p) => p.id === selectedPanelId)
+    if (!panel) return
+
+    activePanelIdRef.current = panel.id
+    halfExtentsRef.current = getWorldHalfExtents(panel.dimensions, panel.rotation)
+    otherBoxesRef.current = state.panels
+      .filter((p) => p.id !== panel.id)
+      .map(getPanelWorldBox)
+    activeGuidesRef.current = state.guidesVisible ? state.guides : []
+
+    beginTransformDrag()
+  }, [selectedPanelId, beginTransformDrag])
 
   const handleObjectChange = useCallback(() => {
-    if (!selectedObject || !selectedPanel) return
+    if (!selectedObject || !activePanelIdRef.current) return
     const state = useDesignStore.getState()
     if (!state.isDraggingGizmo) return
 
-    const otherPanels = state.panels.filter((p) => p.id !== selectedPanel.id)
-    const activeGuides = state.guidesVisible ? state.guides : []
-    const proposed: [number, number, number] = [
+    const proposed: Vec3 = [
       selectedObject.position.x,
       selectedObject.position.y,
       selectedObject.position.z,
     ]
 
-    const { position, feedback } = computeSnappedPosition(
-      selectedPanel,
+    const { position, feedback } = computeSnappedPositionFromBoxes(
+      halfExtentsRef.current,
       proposed,
-      otherPanels,
+      otherBoxesRef.current,
       snappingEnabled,
-      activeGuides
+      activeGuidesRef.current
     )
 
+    // تحريك الـ Object3D مباشرة في Three.js دون أي تحديث لمصفوفة panels في React أثناء السحب
     selectedObject.position.set(position[0], position[1], position[2])
-    movePanelLive(selectedPanel.id, position, feedback)
-  }, [selectedObject, selectedPanel, snappingEnabled, movePanelLive])
+    setSnapFeedback(feedback)
+  }, [selectedObject, snappingEnabled, setSnapFeedback])
 
-  if (!selectedObject || !selectedPanel || toolMode !== 'select') return null
+  const handleMouseUp = useCallback(() => {
+    const id = activePanelIdRef.current
+    activePanelIdRef.current = null
+    otherBoxesRef.current = []
+    activeGuidesRef.current = []
+
+    if (!id || !selectedObject) {
+      endTransformDrag()
+      return
+    }
+
+    const finalPosition: Vec3 = [
+      roundTo(selectedObject.position.x, 2),
+      roundTo(selectedObject.position.y, 2),
+      roundTo(selectedObject.position.z, 2),
+    ]
+    selectedObject.position.set(finalPosition[0], finalPosition[1], finalPosition[2])
+    endTransformDrag({ id, position: finalPosition })
+  }, [selectedObject, endTransformDrag])
+
+  if (!selectedObject || !selectedPanelId || toolMode !== 'select') return null
 
   return (
     <TransformControls
       object={selectedObject}
       mode="translate"
+      translationSnap={null}
       size={1.15}
-      onMouseDown={beginTransformDrag}
-      onMouseUp={endTransformDrag}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
       onObjectChange={handleObjectChange}
     />
   )
