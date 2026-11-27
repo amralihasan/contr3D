@@ -335,13 +335,17 @@ export function loadSavedDesigns(): SavedDesign[] {
       if (!item || typeof item !== 'object') continue
       const obj = item as Record<string, unknown>
       if (typeof obj.id !== 'string' || typeof obj.name !== 'string') continue
+      const updatedAt =
+        typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt) ? obj.updatedAt : 0
+      const createdAt =
+        typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) && obj.createdAt > 0
+          ? obj.createdAt
+          : updatedAt
       valid.push({
         id: obj.id,
         name: obj.name,
-        updatedAt:
-          typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt)
-            ? obj.updatedAt
-            : 0,
+        createdAt,
+        updatedAt,
         panels: sanitizePanels(obj.panels),
         guides: sanitizeGuides(obj.guides),
         thumbnail:
@@ -398,9 +402,14 @@ export function saveDesignByName(
   let nextList: SavedDesign[]
 
   if (matchById) {
+    const preservedCreatedAt =
+      matchById.createdAt && matchById.createdAt > 0
+        ? matchById.createdAt
+        : matchById.updatedAt || now
     updatedDesign = {
       ...matchById,
       name: trimmed,
+      createdAt: preservedCreatedAt,
       updatedAt: now,
       panels: deepClone(panels),
       guides: deepClone(guides),
@@ -411,6 +420,7 @@ export function saveDesignByName(
     updatedDesign = {
       id: `design_${now}_${Math.random().toString(36).slice(2, 7)}`,
       name: trimmed,
+      createdAt: now,
       updatedAt: now,
       panels: deepClone(panels),
       guides: deepClone(guides),

@@ -174,6 +174,7 @@ export interface GuideLine {
 export interface SavedDesign {
   id: string
   name: string
+  createdAt: number
   updatedAt: number
   panels: FurniturePanel[]
   guides?: GuideLine[]
