@@ -30,7 +30,8 @@ import {
 } from '../../constants/presets'
 import { FURNITURE_TEMPLATES } from '../../constants/templates'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { PanelRole } from '../../types/furniture'
+import type { PanelDimensions, PanelRole } from '../../types/furniture'
+import { AddPartModal } from './AddPartModal'
 
 interface PartsSidebarProps {
   onCloseMobile?: () => void
@@ -69,6 +70,7 @@ interface PendingTemplateChoice {
 
 export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('panels')
+  const [pendingPreset, setPendingPreset] = useState<PanelPreset | null>(null)
   const [pendingTemplate, setPendingTemplate] = useState<PendingTemplateChoice | null>(null)
   const [saveFormOpen, setSaveFormOpen] = useState(false)
   const [templateNameInput, setTemplateNameInput] = useState('')
@@ -93,8 +95,10 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
   const resetToStarterTemplate = useDesignStore((s) => s.resetToStarterTemplate)
   const newEmptyDesign = useDesignStore((s) => s.newEmptyDesign)
 
-  const handleAdd = (role: Exclude<PanelRole, 'custom'>) => {
-    addPresetPanel(role)
+  const handleConfirmAddPreset = (dimensions: PanelDimensions, quantity: number) => {
+    if (!pendingPreset) return
+    addPresetPanel(pendingPreset.role, { dimensions, quantity })
+    setPendingPreset(null)
     onCloseMobile?.()
   }
 
@@ -437,7 +441,7 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
             <button
               key={preset.role}
               type="button"
-              onClick={() => handleAdd(preset.role)}
+              onClick={() => setPendingPreset(preset)}
               className="group flex min-h-[54px] w-full items-center justify-between gap-2.5 rounded-2xl border border-slate-800 bg-slate-800/60 px-3 py-2 text-right transition hover:border-amber-500/50 hover:bg-slate-800 active:scale-[0.99]"
             >
               <div className="flex items-center gap-2.5">
@@ -605,6 +609,13 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
           <span>تحميل وحدة كونتر نموذجية</span>
         </button>
       </div>
+
+      {/* نافذة تحديد مقاسات القطعة والكمية قبل إضافتها للمشهد */}
+      <AddPartModal
+        preset={pendingPreset}
+        onClose={() => setPendingPreset(null)}
+        onConfirm={handleConfirmAddPreset}
+      />
 
       {/* نافذة تأكيد تحميل القالب (Portal في منتصف الشاشة لمنع القص داخل القائمة الجانبية) */}
       {pendingTemplate &&

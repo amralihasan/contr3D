@@ -270,7 +270,10 @@ interface DesignState {
   clearStatusToast: () => void
 
   // Panel CRUD & Clipboard
-  addPresetPanel: (role: Exclude<PanelRole, 'custom'>) => void
+  addPresetPanel: (
+    role: Exclude<PanelRole, 'custom'>,
+    options?: { dimensions?: PanelDimensions; quantity?: number }
+  ) => void
   duplicatePanel: (id: string) => void
   deletePanel: (id: string) => void
   deleteSelectedPanels: () => void
@@ -784,21 +787,28 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   clearStatusToast: () => set({ statusToast: null }),
 
-  addPresetPanel: (role) => {
+  addPresetPanel: (role, options) => {
     const preset = ALL_PRESETS.find((p) => p.role === role)
     if (!preset) return
 
     const { panels, guides, past } = get()
-    const countOfRole = panels.filter((p) => p.role === role).length + 1
-    const [, hy] = getWorldHalfExtents(preset.dimensions, [0, 0, 0])
+    const countOfRole = panels.filter((p) => p.role === role).length
 
-    let position: Vec3
+    const dims: PanelDimensions = {
+      width: clampDim(options?.dimensions?.width ?? preset.dimensions.width),
+      height: clampDim(options?.dimensions?.height ?? preset.dimensions.height),
+      depth: clampDim(options?.dimensions?.depth ?? preset.dimensions.depth),
+    }
+    const quantity = Math.min(20, Math.max(1, Math.round(options?.quantity ?? 1)))
+
+    const [, hy] = getWorldHalfExtents(dims, [0, 0, 0])
+
+    let basePosition: Vec3
     if (preset.defaultPosition) {
-      const sameRoleCount = panels.filter((p) => p.role === role).length
-      const shiftX = role === 'hinged_door' && sameRoleCount % 2 === 1 ? -25 : 0
-      const shiftY = role === 'drawer' ? sameRoleCount * 21 : 0
-      const shiftXSliding = role === 'sliding_door' && sameRoleCount % 2 === 1 ? 24 : 0
-      position = [
+      const shiftX = role === 'hinged_door' && countOfRole % 2 === 1 ? -25 : 0
+      const shiftY = role === 'drawer' ? countOfRole * (dims.height + 1) : 0
+      const shiftXSliding = role === 'sliding_door' && countOfRole % 2 === 1 ? 24 : 0
+      basePosition = [
         roundTo(preset.defaultPosition[0] + shiftX + shiftXSliding, 2),
         roundTo(Math.max(hy, preset.defaultPosition[1] + shiftY), 2),
         preset.defaultPosition[2],
@@ -806,40 +816,74 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     } else {
       const offsetStep = (panels.length % 4) * 8
       const baseZ = role === 'back' ? -25 : offsetStep
-      const baseY = role === 'horizontal' && panels.length === 0 ? 40 : hy
-      position = [offsetStep, roundTo(baseY, 2), baseZ]
+      const baseY = role === 'horizontal' && panels.length === 0 ? Math.max(hy, 40) : hy
+      basePosition = [offsetStep, roundTo(baseY, 2), baseZ]
     }
 
-    const newPanel: FurniturePanel = {
-      id: createId('panel'),
-      name: `${preset.shortLabel} ${countOfRole}`,
-      role: preset.role,
-      category: preset.category,
-      dimensions: { ...preset.dimensions },
-      position,
-      rotation: [0, 0, 0],
-      thicknessAxis: preset.thicknessAxis,
-      materialId: preset.defaultMaterial,
-      edgeBanding: getDefaultEdgeBanding(preset.role),
-      ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
-      ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
-      ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
+    const createdPanels: FurniturePanel[] = []
+    for (let i = 0; i < quantity; i += 1) {
+      let pos: Vec3 = [...basePosition]
+      if (i > 0) {
+        if (role === 'shelf') {
+          pos = [basePosition[0], roundTo(basePosition[1] + i * (dims.height + 18), 2), basePosition[2]]
+        } else if (role === 'drawer') {
+          pos = [basePosition[0], roundTo(basePosition[1] + i * (dims.height + 1), 2), basePosition[2]]
+        } else if (preset.thicknessAxis === 'x') {
+          pos = [
+            roundTo(basePosition[0] + i * Math.max(dims.width + 12, 16), 2),
+            basePosition[1],
+            basePosition[2],
+          ]
+        } else if (preset.thicknessAxis === 'y') {
+          pos = [
+            basePosition[0],
+            basePosition[1],
+            roundTo(basePosition[2] + i * Math.min(Math.max(dims.depth + 8, 14), 45), 2),
+          ]
+        } else {
+          pos = [
+            roundTo(basePosition[0] + i * Math.max(dims.width + 4, 24), 2),
+            basePosition[1],
+            basePosition[2],
+          ]
+        }
+      }
+
+      createdPanels.push({
+        id: createId('panel'),
+        name: `${preset.shortLabel} ${countOfRole + i + 1}`,
+        role: preset.role,
+        category: preset.category,
+        dimensions: { ...dims },
+        position: pos,
+        rotation: [0, 0, 0],
+        thicknessAxis: preset.thicknessAxis,
+        materialId: preset.defaultMaterial,
+        edgeBanding: getDefaultEdgeBanding(preset.role),
+        ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
+        ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
+        ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
+      })
     }
 
-    const nextPanels = [...panels, newPanel]
+    const createdIds = createdPanels.map((p) => p.id)
+    const nextPanels = [...panels, ...createdPanels]
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 
     set({
       panels: nextPanels,
       toolMode: 'select',
-      selectedPanelId: newPanel.id,
-      selectedPanelIds: [newPanel.id],
+      selectedPanelId: createdIds[createdIds.length - 1] ?? null,
+      selectedPanelIds: createdIds,
       selectedGuideId: null,
       propsSidebarOpen: !get().focusMode,
       interfacesHidden: preset.category === 'front' ? false : get().interfacesHidden,
       past: pushPast(past, panels, guides),
       future: [],
-      statusToast: `تم إضافة ${newPanel.name}`,
+      statusToast:
+        quantity === 1
+          ? `تم إضافة ${createdPanels[0].name}`
+          : `تم إضافة ${quantity} × ${preset.shortLabel}`,
     })
   },
 
