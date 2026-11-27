@@ -1,5 +1,6 @@
 import {
   Box,
+  ClipboardList,
   Compass,
   DoorClosed,
   DoorOpen,
@@ -19,6 +20,7 @@ import type { CameraPreset } from '../../types/furniture'
 
 interface TopToolbarProps {
   onOpenDesignsModal: () => void
+  onOpenWorkshopReport: () => void
   onTogglePartsDrawer: () => void
   onTogglePropsDrawer: () => void
   isPartsOpen: boolean
@@ -34,6 +36,7 @@ const CAMERA_BUTTONS: { preset: CameraPreset; label: string }[] = [
 
 export function TopToolbar({
   onOpenDesignsModal,
+  onOpenWorkshopReport,
   onTogglePartsDrawer,
   onTogglePropsDrawer,
   isPartsOpen,
@@ -87,14 +90,14 @@ export function TopToolbar({
             <h1 className="text-sm font-bold text-slate-100 sm:text-base">
               مصمم أثاث الكونتر 3D
             </h1>
-            <p className="max-w-[140px] truncate text-xs text-slate-400 sm:max-w-[200px]">
+            <p className="max-w-[140px] truncate text-xs text-slate-400 sm:max-w-[180px]">
               {currentDesignName}
             </p>
           </div>
         </div>
       </div>
 
-      {/* أزرار الكاميرا + أدوات المرحلة الثانية (الواجهات، المقاسات، المغناطيس) */}
+      {/* أزرار الكاميرا + أدوات المرحلة الثانية */}
       <div className="order-3 flex w-full flex-wrap items-center justify-center gap-1.5 pt-1 xl:order-2 xl:w-auto xl:pt-0">
         <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
           <span className="hidden items-center gap-1 px-2 text-xs text-slate-400 md:flex">
@@ -192,7 +195,7 @@ export function TopToolbar({
         </button>
       </div>
 
-      {/* التراجع والإعادة والحفظ */}
+      {/* التراجع والإعادة والحفظ وتقرير الورشة */}
       <div className="order-2 flex items-center gap-1.5 xl:order-3">
         <button
           type="button"
@@ -217,11 +220,22 @@ export function TopToolbar({
 
         <button
           type="button"
+          onClick={onOpenWorkshopReport}
+          className="flex h-11 items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-[0.98] sm:text-sm"
+          title="تقرير الورشة وكشف التقطيع ورص الألواح"
+        >
+          <ClipboardList className="h-4 w-4 text-emerald-300" />
+          <span className="hidden md:inline">تقرير الورشة / التقطيع</span>
+          <span className="md:hidden">التقطيع</span>
+        </button>
+
+        <button
+          type="button"
           onClick={onOpenDesignsModal}
-          className="flex h-11 items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98] sm:text-sm"
+          className="flex h-11 items-center gap-1.5 rounded-xl bg-amber-500 px-3 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98] sm:text-sm"
         >
           <Save className="h-4 w-4" />
-          <span className="hidden sm:inline">حفظ / التصاميم</span>
+          <span className="hidden sm:inline">حفظ</span>
           <FolderOpen className="h-4 w-4 sm:hidden" />
         </button>
 

@@ -21,9 +21,11 @@ import {
 } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
 import {
+  getEffectiveEdgeBanding,
   isInterfaceRole,
   isLegOrBaseRole,
   type Axis,
+  type EdgeSide,
   type PanelDimensions,
 } from '../../types/furniture'
 import { roundTo } from '../../utils/snapping'
@@ -117,6 +119,13 @@ function DimensionControl({
   )
 }
 
+const EDGE_LABELS: { side: EdgeSide; label: string }[] = [
+  { side: 'top', label: 'أمامي / أعلى' },
+  { side: 'bottom', label: 'خلفي / أسفل' },
+  { side: 'right', label: 'يمين' },
+  { side: 'left', label: 'يسار' },
+]
+
 export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const panels = useDesignStore((s) => s.panels)
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
@@ -130,6 +139,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const setPanelClearance = useDesignStore((s) => s.setPanelClearance)
   const setPanelHasHandle = useDesignStore((s) => s.setPanelHasHandle)
   const setPanelHingeSide = useDesignStore((s) => s.setPanelHingeSide)
+  const togglePanelEdgeBanding = useDesignStore((s) => s.togglePanelEdgeBanding)
   const rotatePanel90 = useDesignStore((s) => s.rotatePanel90)
   const setPanelMaterial = useDesignStore((s) => s.setPanelMaterial)
   const duplicatePanel = useDesignStore((s) => s.duplicatePanel)
@@ -266,7 +276,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
           </div>
           <p className="text-sm font-bold text-slate-200">لم يتم تحديد أي قطعة</p>
           <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-            اضغط على أي لوح أو ضلفة أو رجل في مساحة الـ 3D لتعديل المقاسات والخلوص، أو تفعيل التحديد المتعدد لتوزيع الأرفف.
+            اضغط على أي لوح أو ضلفة أو رجل في مساحة الـ 3D لتعديل المقاسات وشريط الحرف والخلوص، أو تفعيل التحديد المتعدد لتوزيع الأرفف.
           </p>
 
           <div className="mt-6 w-full space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5 text-right text-xs text-slate-400">
@@ -288,9 +298,11 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const currentThickness = panel.dimensions[axisToDimKey[panel.thicknessAxis]]
   const isFront = isInterfaceRole(panel.role)
   const isBaseOrLeg = isLegOrBaseRole(panel.role)
+  const isHardwareLegs = panel.role === 'wood_legs' || panel.role === 'metal_legs'
   const clearance = panel.clearanceCm ?? 0.2
   const netW = roundTo(Math.max(1, panel.dimensions.width - clearance * 2), 2)
   const netH = roundTo(Math.max(1, panel.dimensions.height - clearance * 2), 2)
+  const edgeBanding = getEffectiveEdgeBanding(panel)
 
   const deg = (rad: number) => {
     const normalized = Math.round(((rad * 180) / Math.PI) % 360)
@@ -318,6 +330,53 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
       </div>
 
       <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto p-3.5">
+        {/* شريط الحرف (Edge Banding) للألواح والضلف */}
+        {!isHardwareLegs && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-200">شريط الحرف (Edge Banding)</span>
+              <span className="text-[11px] text-amber-300">
+                {[edgeBanding.top, edgeBanding.bottom, edgeBanding.right, edgeBanding.left].filter(Boolean).length} حروف
+              </span>
+            </div>
+
+            {/* معاينة بصرية مصغرة لحواف اللوح */}
+            <div className="mb-2.5 flex justify-center">
+              <div
+                className="flex h-10 w-24 items-center justify-center rounded bg-slate-800/80 text-[10px] font-semibold text-slate-400"
+                style={{
+                  borderTop: edgeBanding.top ? '3px solid #f59e0b' : '1px dashed #475569',
+                  borderBottom: edgeBanding.bottom ? '3px solid #f59e0b' : '1px dashed #475569',
+                  borderRight: edgeBanding.right ? '3px solid #f59e0b' : '1px dashed #475569',
+                  borderLeft: edgeBanding.left ? '3px solid #f59e0b' : '1px dashed #475569',
+                }}
+              >
+                الحروف
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {EDGE_LABELS.map((edge) => {
+                const active = edgeBanding[edge.side]
+                return (
+                  <button
+                    key={edge.side}
+                    type="button"
+                    onClick={() => togglePanelEdgeBanding(panel.id, edge.side)}
+                    className={`flex h-11 items-center justify-center rounded-xl border text-xs font-bold transition ${
+                      active
+                        ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                        : 'border-slate-700 bg-slate-800/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {edge.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* إعدادات خاصة بالضلف والأدراج: الخلوص والمقبض وجهة الفتح */}
         {isFront && (
           <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3">
@@ -358,7 +417,6 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
               />
             </div>
 
-            {/* جهة الفتح / الانزلاق للضلف */}
             {(panel.role === 'hinged_door' || panel.role === 'sliding_door') && (
               <div>
                 <div className="mb-1.5 text-xs font-bold text-slate-300">
@@ -386,7 +444,6 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
               </div>
             )}
 
-            {/* خيار المقبض */}
             <button
               type="button"
               onClick={() => setPanelHasHandle(panel.id, panel.hasHandle === false)}

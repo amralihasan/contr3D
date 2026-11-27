@@ -29,6 +29,19 @@ export type Vec3 = [number, number, number]
 
 export type HingeSide = 'left' | 'right'
 
+export type EdgeSide = 'top' | 'bottom' | 'right' | 'left'
+
+export interface EdgeBanding {
+  /** الحرف الأمامي / العلوي */
+  top: boolean
+  /** الحرف الخلفي / السفلي */
+  bottom: boolean
+  /** الحرف الأيمن */
+  right: boolean
+  /** الحرف الأيسر */
+  left: boolean
+}
+
 export interface PanelDimensions {
   /** العرض على المحور X بالسنتيمتر */
   width: number
@@ -52,6 +65,8 @@ export interface FurniturePanel {
   /** المحور المحلي الذي يمثل سُمك اللوح (18 مم / 6 مم) */
   thicknessAxis: Axis
   materialId: MaterialId
+  /** شريط الحرف الظاهر لكل لوح */
+  edgeBanding?: EdgeBanding
   /** الخلوص (Clearance) للضلف والأدراج بالسنتيمتر، الافتراضي 0.2 سم (2 مم) */
   clearanceCm?: number
   /** عرض مقبض بسيط للضلفة أو الدرج */
@@ -99,4 +114,28 @@ export function isInterfaceRole(role: PanelRole): boolean {
 
 export function isLegOrBaseRole(role: PanelRole): boolean {
   return role === 'plinth_base' || role === 'wood_legs' || role === 'metal_legs'
+}
+
+export function getDefaultEdgeBanding(role: PanelRole): EdgeBanding {
+  switch (role) {
+    case 'hinged_door':
+    case 'sliding_door':
+    case 'drawer':
+      return { top: true, bottom: true, right: true, left: true }
+    case 'back':
+    case 'wood_legs':
+    case 'metal_legs':
+      return { top: false, bottom: false, right: false, left: false }
+    case 'horizontal':
+    case 'vertical':
+    case 'shelf':
+    case 'divider':
+    case 'plinth_base':
+    case 'custom':
+      return { top: true, bottom: false, right: false, left: false }
+  }
+}
+
+export function getEffectiveEdgeBanding(panel: Pick<FurniturePanel, 'role' | 'edgeBanding'>): EdgeBanding {
+  return panel.edgeBanding ?? getDefaultEdgeBanding(panel.role)
 }

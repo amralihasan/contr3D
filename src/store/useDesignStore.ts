@@ -7,17 +7,21 @@ import {
   MIN_CLEARANCE_CM,
   MIN_PANEL_DIM_CM,
 } from '../constants/presets'
-import type {
-  Axis,
-  CameraPreset,
-  FurniturePanel,
-  HingeSide,
-  MaterialId,
-  PanelDimensions,
-  PanelRole,
-  SavedDesign,
-  SnapFeedback,
-  Vec3,
+import {
+  getDefaultEdgeBanding,
+  getEffectiveEdgeBanding,
+  type Axis,
+  type CameraPreset,
+  type EdgeBanding,
+  type EdgeSide,
+  type FurniturePanel,
+  type HingeSide,
+  type MaterialId,
+  type PanelDimensions,
+  type PanelRole,
+  type SavedDesign,
+  type SnapFeedback,
+  type Vec3,
 } from '../types/furniture'
 import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
@@ -62,6 +66,7 @@ function createStarterPanels(): FurniturePanel[] {
       rotation: [0, 0, 0],
       thicknessAxis: 'x',
       materialId: 'light_oak',
+      edgeBanding: getDefaultEdgeBanding('vertical'),
     },
     {
       id: 'starter_right',
@@ -73,6 +78,7 @@ function createStarterPanels(): FurniturePanel[] {
       rotation: [0, 0, 0],
       thicknessAxis: 'x',
       materialId: 'light_oak',
+      edgeBanding: getDefaultEdgeBanding('vertical'),
     },
     {
       id: 'starter_top',
@@ -84,6 +90,7 @@ function createStarterPanels(): FurniturePanel[] {
       rotation: [0, 0, 0],
       thicknessAxis: 'y',
       materialId: 'light_oak',
+      edgeBanding: { top: true, bottom: false, right: true, left: true },
     },
     {
       id: 'starter_shelf',
@@ -95,6 +102,7 @@ function createStarterPanels(): FurniturePanel[] {
       rotation: [0, 0, 0],
       thicknessAxis: 'y',
       materialId: 'light_oak',
+      edgeBanding: getDefaultEdgeBanding('shelf'),
     },
     {
       id: 'starter_back',
@@ -106,6 +114,7 @@ function createStarterPanels(): FurniturePanel[] {
       rotation: [0, 0, 0],
       thicknessAxis: 'z',
       materialId: 'white',
+      edgeBanding: getDefaultEdgeBanding('back'),
     },
   ]
 }
@@ -156,7 +165,6 @@ interface DesignState {
   isDraggingGizmo: boolean
   snapFeedback: SnapFeedback
 
-  // المرحلة الثانية: تحريك وإخفاء الواجهات + خطوط المقاسات + إشعار التوزيع
   interfacesOpen: boolean
   interfacesHidden: boolean
   showDimensions: boolean
@@ -201,11 +209,13 @@ interface DesignState {
   setPanelClearance: (id: string, clearanceCm: number) => void
   setPanelHasHandle: (id: string, hasHandle: boolean) => void
   setPanelHingeSide: (id: string, side: HingeSide) => void
+  togglePanelEdgeBanding: (id: string, side: EdgeSide) => void
+  setPanelEdgeBanding: (id: string, edgeBanding: EdgeBanding) => void
   rotatePanel90: (id: string, axis: Axis) => void
   setPanelMaterial: (id: string, materialId: MaterialId) => void
   renamePanel: (id: string, name: string) => void
 
-  // Phase 2: Auto-distribute shelves/dividers
+  // Auto-distribute shelves/dividers
   autoDistributeSelected: (axisOverride?: DistributeAxis) => void
 
   // Gizmo transform lifecycle
@@ -362,6 +372,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       rotation: [0, 0, 0],
       thicknessAxis: preset.thicknessAxis,
       materialId: preset.defaultMaterial,
+      edgeBanding: getDefaultEdgeBanding(preset.role),
       ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
       ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
       ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
@@ -548,6 +559,46 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
     const nextPanels = panels.map((p) =>
       p.id === id ? { ...p, hingeSide: side } : p
+    )
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
+  togglePanelEdgeBanding: (id, side) => {
+    const { panels, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const current = getEffectiveEdgeBanding(target)
+    const nextEdgeBanding: EdgeBanding = {
+      ...current,
+      [side]: !current[side],
+    }
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, edgeBanding: nextEdgeBanding } : p
+    )
+    saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels),
+      future: [],
+    })
+  },
+
+  setPanelEdgeBanding: (id, edgeBanding) => {
+    const { panels, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, edgeBanding } : p
     )
     saveAutosave(nextPanels, get().currentDesignName, get().currentDesignId)
 

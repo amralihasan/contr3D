@@ -50,7 +50,7 @@ export function SceneCanvas() {
         shadows
         dpr={[1, 2]}
         camera={{ position: [145, 115, 175], fov: 42, near: 1, far: 1500 }}
-        gl={{ antialias: true, preserveDrawingBuffer: false }}
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
         onPointerMissed={() => {
           if (!isDraggingGizmo) {
             selectPanel(null)

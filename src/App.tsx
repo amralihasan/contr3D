@@ -6,10 +6,12 @@ import { DesignsModal } from './components/ui/DesignsModal'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
 import { TopToolbar } from './components/ui/TopToolbar'
+import { WorkshopReportModal } from './components/ui/WorkshopReportModal'
 import { useDesignStore } from './store/useDesignStore'
 
 export function App() {
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
+  const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [partsDrawerOpen, setPartsDrawerOpen] = useState(false)
   const [propsDrawerOpen, setPropsDrawerOpen] = useState(false)
 
@@ -60,7 +62,9 @@ export function App() {
       }
 
       if (e.key === 'Escape') {
-        if (designsModalOpen) {
+        if (workshopReportOpen) {
+          setWorkshopReportOpen(false)
+        } else if (designsModalOpen) {
           setDesignsModalOpen(false)
         } else if (selectedPanelIds.length > 0) {
           selectPanel(null)
@@ -70,12 +74,21 @@ export function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, deleteSelectedPanels, selectPanel, selectedPanelIds, designsModalOpen])
+  }, [
+    undo,
+    redo,
+    deleteSelectedPanels,
+    selectPanel,
+    selectedPanelIds,
+    designsModalOpen,
+    workshopReportOpen,
+  ])
 
   return (
-    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100 print:hidden">
       <TopToolbar
         onOpenDesignsModal={() => setDesignsModalOpen(true)}
+        onOpenWorkshopReport={() => setWorkshopReportOpen(true)}
         onTogglePartsDrawer={() => {
           setPartsDrawerOpen((v) => !v)
           setPropsDrawerOpen(false)
@@ -168,6 +181,10 @@ export function App() {
       </div>
 
       <DesignsModal open={designsModalOpen} onClose={() => setDesignsModalOpen(false)} />
+      <WorkshopReportModal
+        open={workshopReportOpen}
+        onClose={() => setWorkshopReportOpen(false)}
+      />
     </div>
   )
 }
