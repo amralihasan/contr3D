@@ -86,18 +86,37 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
   }
 
   const edgeColor = isSelected ? '#fbbf24' : '#0f172a'
-  const edgeWidth = isSelected ? 2.4 : 0.8
+  const edgeWidth = isSelected ? 2.6 : 0.8
   const edgeOpacity = isSelected ? 1 : 0.22
-  const emissive = isSelected ? '#f59e0b' : '#000000'
-  const emissiveIntensity = isSelected ? 0.09 : 0
+
+  // إزاحة خفيفة متدرجة حسب نوع العنصر لمنع التداخل البصري (Z-Fighting) عند التقاء الأسطح المتطابقة
+  const polyOffsetByRole: Record<FurniturePanel['role'], number> = {
+    horizontal: 1,
+    shelf: 2,
+    vertical: 3,
+    divider: 4,
+    plinth_base: 5,
+    hinged_door: 6,
+    sliding_door: 7,
+    drawer: 8,
+    back: 9,
+    wood_legs: 10,
+    metal_legs: 11,
+    custom: 2,
+  }
+  const polyOffset = polyOffsetByRole[panel.role] ?? 1
+  const materialKey = `${panel.materialId}-${texture ? 'tex' : 'solid'}`
 
   const mainMaterialProps = {
     color: texture ? '#ffffff' : matSpec.color,
     map: texture ?? null,
     roughness: matSpec.roughness,
     metalness: matSpec.metalness,
-    emissive,
-    emissiveIntensity,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: polyOffset,
+    polygonOffsetUnits: polyOffset,
   }
 
   const renderContent = () => {
@@ -119,7 +138,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
           <group position={[-hingeX, 0, 0]}>
             <mesh castShadow receiveShadow onClick={handleClick}>
               <boxGeometry args={[effW, effH, effD]} />
-              <meshStandardMaterial {...mainMaterialProps} />
+              <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
               <Edges
                 scale={isSelected ? 1.003 : 1.001}
                 threshold={15}
@@ -155,7 +174,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
         <group ref={animRef}>
           <mesh castShadow receiveShadow onClick={handleClick}>
             <boxGeometry args={[effW, effH, effD]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges
               scale={isSelected ? 1.003 : 1.001}
               threshold={15}
@@ -200,7 +219,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
             onClick={handleClick}
           >
             <boxGeometry args={[effW, effH, frontThick]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges
               scale={isSelected ? 1.003 : 1.001}
               threshold={15}
@@ -279,23 +298,23 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
           {/* واجهة أمامية وخلفية */}
           <mesh position={[0, 0, depth / 2 - wall / 2]} castShadow receiveShadow onClick={handleClick}>
             <boxGeometry args={[width, height, wall]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
           </mesh>
           <mesh position={[0, 0, -depth / 2 + wall / 2]} castShadow receiveShadow onClick={handleClick}>
             <boxGeometry args={[width, height, wall]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
           </mesh>
           {/* جوانب السوكلة */}
           <mesh position={[-width / 2 + wall / 2, 0, 0]} castShadow receiveShadow onClick={handleClick}>
             <boxGeometry args={[wall, height, Math.max(1, depth - wall * 2)]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
           </mesh>
           <mesh position={[width / 2 - wall / 2, 0, 0]} castShadow receiveShadow onClick={handleClick}>
             <boxGeometry args={[wall, height, Math.max(1, depth - wall * 2)]} />
-            <meshStandardMaterial {...mainMaterialProps} />
+            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
           </mesh>
           {/* إطار تحديد خفيف للمساحة الكلية عند الاختيار */}
@@ -349,7 +368,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
                 onClick={handleClick}
               >
                 <cylinderGeometry args={[legRadiusTop, legRadiusBot, legH, 16]} />
-                <meshStandardMaterial {...mainMaterialProps} />
+                <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
               </mesh>
             </group>
           ))}
@@ -403,11 +422,13 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
               >
                 <boxGeometry args={[postSize, postH, postSize]} />
                 <meshStandardMaterial
+                  key={panel.materialId}
                   color={matSpec.color}
                   metalness={0.75}
                   roughness={0.32}
-                  emissive={emissive}
-                  emissiveIntensity={emissiveIntensity}
+                  polygonOffset
+                  polygonOffsetFactor={polyOffset}
+                  polygonOffsetUnits={polyOffset}
                 />
                 <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
               </mesh>
@@ -438,7 +459,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
     return (
       <mesh castShadow receiveShadow onClick={handleClick}>
         <boxGeometry args={[width, height, depth]} />
-        <meshStandardMaterial {...mainMaterialProps} />
+        <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
         <Edges
           scale={isSelected ? 1.003 : 1.001}
           threshold={15}

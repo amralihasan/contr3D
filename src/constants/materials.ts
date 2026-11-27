@@ -24,9 +24,9 @@ export const MATERIALS: Record<MaterialId, MaterialSpec> = {
   black: {
     id: 'black',
     label: 'أسود',
-    swatch: '#1f2328',
-    color: '#25282e',
-    roughness: 0.48,
+    swatch: '#1c1f24',
+    color: '#1e2228',
+    roughness: 0.54,
     metalness: 0.04,
     hasWoodGrain: false,
   },
