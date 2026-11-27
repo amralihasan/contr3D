@@ -13,6 +13,7 @@ import { GuideLines3D } from './GuideLines3D'
 import { HumanReference } from './HumanReference'
 import { PanelResizeHandles } from './PanelResizeHandles'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
+import { SelectedDimensionTip } from './SelectedDimensionTip'
 import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
@@ -370,6 +371,7 @@ export function SceneCanvas() {
         <HumanReference />
         <TapeMeasureTool objectMap={objectMap} handlersRef={tapeHandlersRef} />
         <DimensionsOverlay3D />
+        <SelectedDimensionTip />
         <PanelTransformGizmo selectedObject={selectedObject} />
         <PanelResizeHandles selectedObject={selectedObject} />
         <ExportCaptureController />

@@ -200,6 +200,7 @@ interface DesignState {
   tapeMode: TapeMode
   isDraggingTape: boolean
   isResizingHandle: boolean
+  liveResizePreview: { id: string; dimensions: PanelDimensions; position: Vec3 } | null
   activeReferenceEdge: ReferenceEdge | null
   draftGuideDistanceCm: number
   draftGuideDirection: 1 | -1
@@ -318,6 +319,9 @@ interface DesignState {
   setSnapFeedback: (feedback: SnapFeedback) => void
   endTransformDrag: (finalMove?: { id: string; position: Vec3 }) => void
   beginResizeDrag: () => void
+  setLiveResizePreview: (
+    preview: { id: string; dimensions: PanelDimensions; position: Vec3 } | null
+  ) => void
   endResizeDrag: (finalResize?: {
     id: string
     dimensions: PanelDimensions
@@ -423,6 +427,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   tapeMode: 'guide',
   isDraggingTape: false,
   isResizingHandle: false,
+  liveResizePreview: null,
   activeReferenceEdge: null,
   draftGuideDistanceCm: 30,
   draftGuideDirection: 1,
@@ -1558,10 +1563,13 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const { panels, guides } = get()
     set({
       isResizingHandle: true,
+      liveResizePreview: null,
       dragSnapshot: cloneSnapshot(panels, guides),
       snapFeedback: { x: false, y: false, z: false, floor: false, guide: false },
     })
   },
+
+  setLiveResizePreview: (preview) => set({ liveResizePreview: preview }),
 
   endResizeDrag: (finalResize) => {
     const { dragSnapshot, panels, guides, past, currentDesignName, currentDesignId } = get()
@@ -1570,6 +1578,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     if (!finalResize) {
       set({
         isResizingHandle: false,
+        liveResizePreview: null,
         dragSnapshot: null,
         snapFeedback: cleanFeedback,
       })
@@ -1580,6 +1589,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     if (!prevPanel) {
       set({
         isResizingHandle: false,
+        liveResizePreview: null,
         dragSnapshot: null,
         snapFeedback: cleanFeedback,
       })
@@ -1597,6 +1607,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     if (!changed) {
       set({
         isResizingHandle: false,
+        liveResizePreview: null,
         dragSnapshot: null,
         snapFeedback: cleanFeedback,
       })
@@ -1617,6 +1628,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     set({
       panels: nextPanels,
       isResizingHandle: false,
+      liveResizePreview: null,
       dragSnapshot: null,
       snapFeedback: cleanFeedback,
       past: dragSnapshot ? pushPast(past, dragSnapshot.panels, dragSnapshot.guides) : past,

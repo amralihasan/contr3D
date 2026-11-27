@@ -125,6 +125,7 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
 
   const beginResizeDrag = useDesignStore((s) => s.beginResizeDrag)
+  const setLiveResizePreview = useDesignStore((s) => s.setLiveResizePreview)
   const endResizeDrag = useDesignStore((s) => s.endResizeDrag)
   const setSnapFeedback = useDesignStore((s) => s.setSnapFeedback)
 
@@ -199,6 +200,7 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
 
       setDraggingId(null)
       setPreviewState(null)
+      setLiveResizePreview(null)
     }
 
     const onPointerMove = (ev: PointerEvent) => {
@@ -327,6 +329,11 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
       drag.latestDims = nextDims
       drag.latestPos = nextPos
       setSnapFeedback(feedback)
+      setLiveResizePreview({
+        id: drag.panelId,
+        dimensions: nextDims,
+        position: nextPos,
+      })
 
       const faceHalf = newDim / 2 + 4.5
       setPreviewState({
@@ -350,7 +357,17 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
     }
-  }, [draggingId, camera, gl, get, selectedObject, snappingEnabled, endResizeDrag, setSnapFeedback])
+  }, [
+    draggingId,
+    camera,
+    gl,
+    get,
+    selectedObject,
+    snappingEnabled,
+    endResizeDrag,
+    setLiveResizePreview,
+    setSnapFeedback,
+  ])
 
   if (!panel) return null
 
