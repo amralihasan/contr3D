@@ -1,4 +1,8 @@
-import type { FurniturePanel, PricingConfig } from '../types/furniture'
+import {
+  getEffectivePanelHandle,
+  type FurniturePanel,
+  type PricingConfig,
+} from '../types/furniture'
 import type { CutListReport } from './cutList'
 import type { NestingReport } from './sheetOptimizer'
 import { roundTo } from './snapping'
@@ -71,12 +75,12 @@ export function computeCostEstimate(
     if (panel.role === 'hinged_door') {
       hingedDoorCount += 1
       hingeCount += panel.dimensions.height > 100 ? 3 : 2
-      if (panel.hasHandle !== false) handleCount += 1
+      if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
     } else if (panel.role === 'sliding_door') {
-      if (panel.hasHandle !== false) handleCount += 1
+      if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
     } else if (panel.role === 'drawer') {
       drawerCount += 1
-      if (panel.hasHandle !== false) handleCount += 1
+      if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
     } else if (panel.role === 'wood_legs' || panel.role === 'metal_legs') {
       legsSetCount += 1
     }

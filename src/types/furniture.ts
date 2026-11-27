@@ -31,6 +31,22 @@ export type HingeSide = 'left' | 'right'
 
 export type EdgeSide = 'top' | 'bottom' | 'right' | 'left'
 
+export type HandleType = 'bar' | 'knob' | 'edge' | 'recessed' | 'none'
+
+export type HandleColor = 'black' | 'gold' | 'silver' | 'wood'
+
+export type HandlePosition = 'left' | 'right' | 'top' | 'bottom' | 'center'
+
+export type HandleOrientation = 'horizontal' | 'vertical'
+
+export interface PanelHandleConfig {
+  type: HandleType
+  color: HandleColor
+  position: HandlePosition
+  orientation?: HandleOrientation
+  length?: number
+}
+
 export interface EdgeBanding {
   /** الحرف الأمامي / العلوي */
   top: boolean
@@ -92,6 +108,8 @@ export interface FurniturePanel {
   clearanceCm?: number
   /** عرض مقبض بسيط للضلفة أو الدرج */
   hasHandle?: boolean
+  /** إعدادات المقبض التفصيلية (النوع، اللون، الموضع، الاتجاه، الطول) */
+  handle?: PanelHandleConfig
   /** جهة المفصلة للضلفة المفصلية أو اتجاه انزلاق الضلفة الجرار */
   hingeSide?: HingeSide
 }
@@ -230,4 +248,70 @@ export function getDefaultEdgeBanding(role: PanelRole): EdgeBanding {
 
 export function getEffectiveEdgeBanding(panel: Pick<FurniturePanel, 'role' | 'edgeBanding'>): EdgeBanding {
   return panel.edgeBanding ?? getDefaultEdgeBanding(panel.role)
+}
+
+export function getDefaultPanelHandle(
+  panel: Pick<FurniturePanel, 'role' | 'hasHandle' | 'hingeSide' | 'dimensions'>
+): PanelHandleConfig {
+  if (panel.hasHandle === false) {
+    return {
+      type: 'none',
+      color: 'silver',
+      position: panel.role === 'drawer' ? 'center' : panel.hingeSide === 'left' ? 'right' : 'left',
+      orientation: panel.role === 'drawer' ? 'horizontal' : 'vertical',
+      length: 16,
+    }
+  }
+
+  if (panel.role === 'drawer') {
+    return {
+      type: 'bar',
+      color: 'silver',
+      position: 'center',
+      orientation: 'horizontal',
+      length: Math.min(16, Math.max(8, Math.round(panel.dimensions.width * 0.3))),
+    }
+  }
+
+  if (panel.role === 'sliding_door') {
+    return {
+      type: 'recessed',
+      color: 'silver',
+      position: panel.hingeSide === 'right' ? 'right' : 'left',
+      orientation: 'vertical',
+      length: 16,
+    }
+  }
+
+  if (panel.role === 'hinged_door') {
+    return {
+      type: 'bar',
+      color: 'silver',
+      position: panel.hingeSide === 'left' ? 'right' : 'left',
+      orientation: 'vertical',
+      length: 14,
+    }
+  }
+
+  return {
+    type: 'none',
+    color: 'silver',
+    position: 'center',
+    orientation: 'horizontal',
+    length: 12,
+  }
+}
+
+export function getEffectivePanelHandle(
+  panel: Pick<FurniturePanel, 'role' | 'hasHandle' | 'hingeSide' | 'dimensions' | 'handle'>
+): PanelHandleConfig {
+  const defaults = getDefaultPanelHandle(panel)
+  if (!panel.handle) return defaults
+  return {
+    type: panel.handle.type,
+    color: panel.handle.color,
+    position: panel.handle.position,
+    orientation: panel.handle.orientation ?? defaults.orientation,
+    length: panel.handle.length ?? defaults.length,
+  }
 }

@@ -1,9 +1,13 @@
 import { MATERIALS } from '../constants/materials'
 import {
   getEffectiveEdgeBanding,
+  getEffectivePanelHandle,
   type EdgeBanding,
   type FurniturePanel,
+  type HandleColor,
+  type HandleType,
   type MaterialId,
+  type PanelHandleConfig,
   type PanelRole,
 } from '../types/furniture'
 import { roundTo } from './snapping'
@@ -76,6 +80,34 @@ const ROLE_LABELS: Record<PanelRole, string> = {
   wood_legs: 'طقم 4 رجول خشب مايلة',
   metal_legs: 'طقم 4 رجول معدن مستقيمة',
   custom: 'لوح مخصص',
+}
+
+const HANDLE_TYPE_LABELS: Record<HandleType, string> = {
+  bar: 'مقبض بار مودرن',
+  knob: 'مقبض زرار دائري',
+  edge: 'مقبض بروفايل حافة',
+  recessed: 'مقبض غاطس',
+  none: 'فتح بالتاتش (Push-to-open)',
+}
+
+const HANDLE_COLOR_LABELS: Record<HandleColor, string> = {
+  black: 'أسود مط',
+  gold: 'ذهبي',
+  silver: 'فضي',
+  wood: 'خشبي',
+}
+
+function formatHandleWorkshopNote(handle: PanelHandleConfig): string {
+  if (handle.type === 'none') {
+    return HANDLE_TYPE_LABELS.none
+  }
+  const typeLabel = HANDLE_TYPE_LABELS[handle.type]
+  const colorLabel = HANDLE_COLOR_LABELS[handle.color]
+  const lenText =
+    (handle.type === 'bar' || handle.type === 'edge') && handle.length
+      ? ` (${handle.length} سم)`
+      : ''
+  return `${typeLabel} ${colorLabel}${lenText}`
 }
 
 function formatEdgeSummary(eb: EdgeBanding): string {
@@ -194,6 +226,31 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
       const lengthCm = Math.max(netW, netH)
       const widthCm = Math.min(netW, netH)
 
+      const effHandle = getEffectivePanelHandle(panel)
+      const baseNotes = buildPanelWorkshopNotes(panel)
+      const handleNote = formatHandleWorkshopNote(effHandle)
+      const combinedNotes = [baseNotes, handleNote].filter(Boolean).join(' | ')
+
+      if (effHandle.type !== 'none') {
+        const lenLabel =
+          (effHandle.type === 'bar' || effHandle.type === 'edge') && effHandle.length
+            ? `طول ${effHandle.length} سم`
+            : 'مقاس قياسي'
+        const hwKey = `handle|${effHandle.type}|${effHandle.color}|${lenLabel}`
+        const existingHw = hardwareMap.get(hwKey)
+        if (existingHw) {
+          existingHw.quantity += 1
+        } else {
+          hardwareMap.set(hwKey, {
+            key: hwKey,
+            name: HANDLE_TYPE_LABELS[effHandle.type],
+            dimensionsLabel: lenLabel,
+            materialLabel: HANDLE_COLOR_LABELS[effHandle.color],
+            quantity: 1,
+          })
+        }
+      }
+
       pieces.push({
         id: `${panel.id}_door`,
         sourcePanelId: panel.id,
@@ -206,7 +263,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: eb,
         edgeMetersPerPiece: calcEdgeMeters(netW, netH, eb),
         edgeLabel: formatEdgeSummary(eb),
-        workshopNotes: buildPanelWorkshopNotes(panel),
+        workshopNotes: combinedNotes,
       })
       continue
     }
@@ -217,6 +274,29 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
       const effW = Math.max(3, roundTo(panel.dimensions.width - clearance * 2, 2))
       const effH = Math.max(3, roundTo(panel.dimensions.height - clearance * 2, 2))
       const frontThick = 1.8
+
+      const effHandle = getEffectivePanelHandle(panel)
+      const handleNote = formatHandleWorkshopNote(effHandle)
+
+      if (effHandle.type !== 'none') {
+        const lenLabel =
+          (effHandle.type === 'bar' || effHandle.type === 'edge') && effHandle.length
+            ? `طول ${effHandle.length} سم`
+            : 'مقاس قياسي'
+        const hwKey = `handle|${effHandle.type}|${effHandle.color}|${lenLabel}`
+        const existingHw = hardwareMap.get(hwKey)
+        if (existingHw) {
+          existingHw.quantity += 1
+        } else {
+          hardwareMap.set(hwKey, {
+            key: hwKey,
+            name: HANDLE_TYPE_LABELS[effHandle.type],
+            dimensionsLabel: lenLabel,
+            materialLabel: HANDLE_COLOR_LABELS[effHandle.color],
+            quantity: 1,
+          })
+        }
+      }
 
       // واجهة الدرج
       pieces.push({
@@ -231,7 +311,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: eb,
         edgeMetersPerPiece: calcEdgeMeters(effW, effH, eb),
         edgeLabel: formatEdgeSummary(eb),
-        workshopNotes: '',
+        workshopNotes: handleNote,
       })
 
       // أجزاء صندوق الدرج الداخلي (جنبين + ضهر 18 مم، وقاع 6 مم)

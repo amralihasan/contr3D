@@ -7,9 +7,13 @@ import {
   type EdgeBanding,
   type FurniturePanel,
   type GuideLine,
+  type HandleColor,
+  type HandlePosition,
+  type HandleType,
   type MaterialId,
   type PanelCategory,
   type PanelCutout,
+  type PanelHandleConfig,
   type PanelRole,
   type PricingConfig,
   type SavedDesign,
@@ -121,6 +125,32 @@ function sanitizeCutouts(raw: unknown): PanelCutout[] | undefined {
   return valid
 }
 
+function sanitizeHandle(raw: unknown): PanelHandleConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  const validTypes: HandleType[] = ['bar', 'knob', 'edge', 'recessed', 'none']
+  const validColors: HandleColor[] = ['black', 'gold', 'silver', 'wood']
+  const validPositions: HandlePosition[] = ['left', 'right', 'top', 'bottom', 'center']
+
+  const type = validTypes.includes(obj.type as HandleType) ? (obj.type as HandleType) : 'bar'
+  const color = validColors.includes(obj.color as HandleColor)
+    ? (obj.color as HandleColor)
+    : 'silver'
+  const position = validPositions.includes(obj.position as HandlePosition)
+    ? (obj.position as HandlePosition)
+    : 'center'
+  const orientation =
+    obj.orientation === 'vertical' || obj.orientation === 'horizontal'
+      ? obj.orientation
+      : undefined
+  const length =
+    typeof obj.length === 'number' && Number.isFinite(obj.length) && obj.length > 0
+      ? obj.length
+      : undefined
+
+  return { type, color, position, orientation, length }
+}
+
 function sanitizeEdgeBanding(raw: unknown, role: PanelRole): EdgeBanding {
   const fallback = getDefaultEdgeBanding(role)
   if (!raw || typeof raw !== 'object') return fallback
@@ -184,6 +214,10 @@ export function sanitizePanel(raw: unknown): FurniturePanel | null {
   }
   if (typeof obj.hasHandle === 'boolean') {
     panel.hasHandle = obj.hasHandle
+  }
+  const cleanHandle = sanitizeHandle(obj.handle)
+  if (cleanHandle) {
+    panel.handle = cleanHandle
   }
   if (obj.hingeSide === 'left' || obj.hingeSide === 'right') {
     panel.hingeSide = obj.hingeSide

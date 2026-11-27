@@ -11,6 +11,8 @@ import { FURNITURE_TEMPLATES } from '../constants/templates'
 import {
   getDefaultEdgeBanding,
   getEffectiveEdgeBanding,
+  getEffectivePanelHandle,
+  isInterfaceRole,
   type Axis,
   type CameraPreset,
   type CornerRadius,
@@ -24,6 +26,7 @@ import {
   type MaterialId,
   type PanelCutout,
   type PanelDimensions,
+  type PanelHandleConfig,
   type PanelRole,
   type SavedDesign,
   type SnapFeedback,
@@ -288,6 +291,8 @@ interface DesignState {
   setPanelThickness: (id: string, thicknessCm: number) => void
   setPanelClearance: (id: string, clearanceCm: number) => void
   setPanelHasHandle: (id: string, hasHandle: boolean) => void
+  setPanelHandle: (id: string, patch: Partial<PanelHandleConfig>) => void
+  applyHandleToAllFronts: (sourceId: string) => void
   setPanelHingeSide: (id: string, side: HingeSide) => void
   togglePanelEdgeBanding: (id: string, side: EdgeSide) => void
   setPanelEdgeBanding: (id: string, edgeBanding: EdgeBanding) => void
@@ -1138,15 +1143,111 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const target = panels.find((p) => p.id === id)
     if (!target) return
 
-    const nextPanels = panels.map((p) =>
-      p.id === id ? { ...p, hasHandle } : p
-    )
+    const nextPanels = panels.map((p) => {
+      if (p.id !== id) return p
+      const current = getEffectivePanelHandle(p)
+      const fallbackType = p.role === 'sliding_door' ? 'recessed' : 'bar'
+      const nextHandle: PanelHandleConfig = {
+        ...current,
+        type: hasHandle ? (current.type === 'none' ? fallbackType : current.type) : 'none',
+      }
+      return { ...p, hasHandle, handle: nextHandle }
+    })
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 
     set({
       panels: nextPanels,
       past: pushPast(past, panels, guides),
       future: [],
+    })
+  },
+
+  setPanelHandle: (id, patch) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) => {
+      if (p.id !== id) return p
+      const current = getEffectivePanelHandle(p)
+      const nextHandle: PanelHandleConfig = {
+        ...current,
+        ...patch,
+      }
+      return {
+        ...p,
+        handle: nextHandle,
+        hasHandle: nextHandle.type !== 'none',
+      }
+    })
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  applyHandleToAllFronts: (sourceId) => {
+    const { panels, guides, past } = get()
+    const source = panels.find((p) => p.id === sourceId)
+    if (!source) return
+
+    const sourceHandle = getEffectivePanelHandle(source)
+    let updatedCount = 0
+
+    const nextPanels = panels.map((p) => {
+      if (!isInterfaceRole(p.role)) return p
+      updatedCount += 1
+
+      if (sourceHandle.type === 'none') {
+        return {
+          ...p,
+          hasHandle: false,
+          handle: { ...sourceHandle, type: 'none' as const },
+        }
+      }
+
+      if (p.role === 'drawer') {
+        return {
+          ...p,
+          hasHandle: true,
+          handle: {
+            ...sourceHandle,
+            position: sourceHandle.position === 'top' ? ('top' as const) : ('center' as const),
+            orientation: 'horizontal' as const,
+          },
+        }
+      }
+
+      const doorPosition =
+        sourceHandle.position === 'top' ||
+        sourceHandle.position === 'bottom' ||
+        sourceHandle.position === 'center'
+          ? sourceHandle.position
+          : p.hingeSide === 'left'
+            ? ('right' as const)
+            : ('left' as const)
+
+      return {
+        ...p,
+        hasHandle: true,
+        handle: {
+          ...sourceHandle,
+          position: doorPosition,
+        },
+      }
+    })
+
+    if (updatedCount === 0) return
+
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast: 'تم تطبيق المقبض على كل الضلف والأدراج',
     })
   },
 

@@ -25,11 +25,15 @@ import {
 import { useDesignStore } from '../../store/useDesignStore'
 import {
   getEffectiveEdgeBanding,
+  getEffectivePanelHandle,
   isInterfaceRole,
   isLegOrBaseRole,
   type Axis,
   type CornerRadius,
   type EdgeSide,
+  type HandleColor,
+  type HandlePosition,
+  type HandleType,
   type PanelDimensions,
 } from '../../types/furniture'
 import { getMaxCornerRadius, getPanelFaceSize } from '../../utils/panelGeometry'
@@ -168,6 +172,23 @@ const EDGE_LABELS: { side: EdgeSide; label: string }[] = [
   { side: 'left', label: 'يسار' },
 ]
 
+const HANDLE_TYPE_OPTIONS: { type: HandleType; label: string }[] = [
+  { type: 'bar', label: 'بار مودرن' },
+  { type: 'knob', label: 'زرار دائري' },
+  { type: 'edge', label: 'بروفايل حافة' },
+  { type: 'recessed', label: 'غاطس' },
+  { type: 'none', label: 'بدون / تاتش' },
+]
+
+const HANDLE_COLOR_OPTIONS: { color: HandleColor; label: string; swatch: string }[] = [
+  { color: 'black', label: 'أسود مط', swatch: '#1f2937' },
+  { color: 'gold', label: 'ذهبي', swatch: '#d4af37' },
+  { color: 'silver', label: 'فضي', swatch: '#cbd5e1' },
+  { color: 'wood', label: 'خشبي', swatch: '#b48252' },
+]
+
+const HANDLE_LENGTH_PRESETS = [12, 16, 20, 32] as const
+
 export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const panels = useDesignStore((s) => s.panels)
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
@@ -179,7 +200,8 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const updatePanelDimension = useDesignStore((s) => s.updatePanelDimension)
   const setPanelThickness = useDesignStore((s) => s.setPanelThickness)
   const setPanelClearance = useDesignStore((s) => s.setPanelClearance)
-  const setPanelHasHandle = useDesignStore((s) => s.setPanelHasHandle)
+  const setPanelHandle = useDesignStore((s) => s.setPanelHandle)
+  const applyHandleToAllFronts = useDesignStore((s) => s.applyHandleToAllFronts)
   const setPanelHingeSide = useDesignStore((s) => s.setPanelHingeSide)
   const togglePanelEdgeBanding = useDesignStore((s) => s.togglePanelEdgeBanding)
   const setPanelCornerRadius = useDesignStore((s) => s.setPanelCornerRadius)
@@ -355,6 +377,24 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const roundedCornersCount = [cr.tl, cr.tr, cr.bl, cr.br].filter((v) => v > 0.01).length
   const shapeModsCount = (roundedCornersCount > 0 ? 1 : 0) + cutouts.length
 
+  const handleConfig = getEffectivePanelHandle(panel)
+  const activeHandleBadge =
+    HANDLE_TYPE_OPTIONS.find((o) => o.type === handleConfig.type)?.label ?? 'بار مودرن'
+  const doorPosOptions: { pos: HandlePosition; label: string }[] =
+    panel.role === 'drawer'
+      ? [
+          { pos: 'center', label: 'منتصف' },
+          { pos: 'top', label: 'حافة علوية' },
+          { pos: 'bottom', label: 'حافة سفلية' },
+        ]
+      : [
+          { pos: 'right', label: 'يمين' },
+          { pos: 'left', label: 'يسار' },
+          { pos: 'top', label: 'أعلى' },
+          { pos: 'bottom', label: 'أسفل' },
+          { pos: 'center', label: 'منتصف' },
+        ]
+
   const deg = (rad: number) => {
     const normalized = Math.round(((rad * 180) / Math.PI) % 360)
     return normalized < 0 ? normalized + 360 : normalized
@@ -511,23 +551,188 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
                     })}
                   </div>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => setPanelHasHandle(panel.id, panel.hasHandle === false)}
-                  className={`flex h-9 w-full items-center justify-between rounded-xl border px-3 text-xs font-bold transition ${
-                    panel.hasHandle !== false
-                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200'
-                      : 'border-slate-700 bg-slate-800/70 text-slate-400'
-                  }`}
-                >
-                  <span>مقبض بسيط</span>
-                  <span>{panel.hasHandle !== false ? 'مُفعل' : 'بدون'}</span>
-                </button>
               </div>
             )}
           </div>
         </AccordionSection>
+
+        {/* قسم تخصيص المقبض (للضلف والأدراج فقط) */}
+        {isFront && (
+          <AccordionSection
+            title="المقبض (Handle)"
+            badge={activeHandleBadge}
+            defaultOpen
+          >
+            <div className="space-y-3">
+              {/* نوع المقبض */}
+              <div>
+                <div className="mb-1.5 text-[11px] font-bold text-slate-300">نوع المقبض</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {HANDLE_TYPE_OPTIONS.map((opt) => {
+                    const active = handleConfig.type === opt.type
+                    return (
+                      <button
+                        key={opt.type}
+                        type="button"
+                        onClick={() => {
+                          const patch: {
+                            type: HandleType
+                            position?: HandlePosition
+                            orientation?: 'horizontal' | 'vertical'
+                          } = { type: opt.type }
+                          if (opt.type === 'edge' && handleConfig.position === 'center') {
+                            patch.position = 'top'
+                          } else if (
+                            (opt.type === 'bar' || opt.type === 'recessed') &&
+                            panel.role === 'drawer'
+                          ) {
+                            patch.orientation = 'horizontal'
+                          }
+                          setPanelHandle(panel.id, patch)
+                        }}
+                        className={`h-9 rounded-xl border px-2 text-xs font-bold transition ${
+                          opt.type === 'none' ? 'col-span-2' : ''
+                        } ${
+                          active
+                            ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                            : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {handleConfig.type !== 'none' && (
+                <>
+                  {/* لون المقبض */}
+                  <div>
+                    <div className="mb-1.5 text-[11px] font-bold text-slate-300">لون المقبض</div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {HANDLE_COLOR_OPTIONS.map((opt) => {
+                        const active = handleConfig.color === opt.color
+                        return (
+                          <button
+                            key={opt.color}
+                            type="button"
+                            onClick={() => setPanelHandle(panel.id, { color: opt.color })}
+                            className={`flex h-10 flex-col items-center justify-center gap-1 rounded-xl border transition ${
+                              active
+                                ? 'border-amber-500 bg-amber-500/15 text-amber-200'
+                                : 'border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span
+                              className="h-4 w-4 rounded-full ring-1 ring-white/30"
+                              style={{ backgroundColor: opt.swatch }}
+                            />
+                            <span className="text-[10px] font-bold leading-none">
+                              {opt.label}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* الموضع */}
+                  <div>
+                    <div className="mb-1.5 text-[11px] font-bold text-slate-300">الموضع</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {doorPosOptions.map((opt) => {
+                        const active = handleConfig.position === opt.pos
+                        return (
+                          <button
+                            key={opt.pos}
+                            type="button"
+                            onClick={() => setPanelHandle(panel.id, { position: opt.pos })}
+                            className={`h-9 flex-1 min-w-[64px] rounded-xl border px-2 text-[11px] font-bold transition ${
+                              active
+                                ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* الاتجاه (للبار والغاطس) */}
+                  {(handleConfig.type === 'bar' || handleConfig.type === 'recessed') && (
+                    <div>
+                      <div className="mb-1.5 text-[11px] font-bold text-slate-300">الاتجاه</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {(
+                          [
+                            { val: 'horizontal', label: 'أفقي' },
+                            { val: 'vertical', label: 'رأسي' },
+                          ] as const
+                        ).map((opt) => {
+                          const active = (handleConfig.orientation ?? 'horizontal') === opt.val
+                          return (
+                            <button
+                              key={opt.val}
+                              type="button"
+                              onClick={() => setPanelHandle(panel.id, { orientation: opt.val })}
+                              className={`h-9 rounded-xl border text-xs font-bold transition ${
+                                active
+                                  ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                  : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* الطول (للبار وبروفايل الحافة) */}
+                  {(handleConfig.type === 'bar' || handleConfig.type === 'edge') && (
+                    <div>
+                      <div className="mb-1.5 text-[11px] font-bold text-slate-300">
+                        طول المقبض (سم)
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {HANDLE_LENGTH_PRESETS.map((len) => {
+                          const active = Math.abs((handleConfig.length ?? 16) - len) < 0.5
+                          return (
+                            <button
+                              key={len}
+                              type="button"
+                              onClick={() => setPanelHandle(panel.id, { length: len })}
+                              className={`tabular-nums h-9 rounded-xl border text-[11px] font-bold transition ${
+                                active
+                                  ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                  : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              {len} سم
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* زر توحيد المقبض على كل الضلف والأدراج */}
+              <button
+                type="button"
+                onClick={() => applyHandleToAllFronts(panel.id)}
+                className="flex h-10 w-full items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-[0.98]"
+              >
+                تطبيق على كل الضلف والأدراج
+              </button>
+            </div>
+          </AccordionSection>
+        )}
 
         {/* 2. اللون والخامة (مفتوح افتراضياً) */}
         <AccordionSection title="اللون والخامة" defaultOpen>

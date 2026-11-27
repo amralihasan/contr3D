@@ -4,12 +4,13 @@ import { memo, useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { MATERIALS } from '../../constants/materials'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { FurniturePanel } from '../../types/furniture'
+import { getEffectivePanelHandle, type FurniturePanel } from '../../types/furniture'
 import {
   buildExtrudedPanelGeometry,
   hasCustomPanelGeometry,
 } from '../../utils/panelGeometry'
 import { getWoodTexture } from '../../utils/woodTextures'
+import { PanelHandle } from './PanelHandle'
 import type { TapePanelHandlers } from './TapeMeasureTool'
 
 interface WoodPanelMeshProps {
@@ -229,7 +230,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const renderContent = () => {
     const { width, height, depth } = panel.dimensions
     const clearance = panel.clearanceCm ?? 0.2
-    const hasHandle = panel.hasHandle !== false
+    const handleConfig = getEffectivePanelHandle(panel)
 
     // 1. ضلفة مفصلية
     if (panel.role === 'hinged_door') {
@@ -238,7 +239,6 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       const effD = depth
       const hingeSide = panel.hingeSide ?? 'right'
       const hingeX = hingeSide === 'left' ? -effW / 2 : effW / 2
-      const handleX = hingeSide === 'left' ? effW / 2 - 3.2 : -effW / 2 + 3.2
 
       return (
         <group position={[hingeX, 0, 0]} ref={animRef}>
@@ -260,21 +260,15 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 opacity={edgeOpacity}
               />
             </mesh>
-            {hasHandle && (
-              <mesh
-                position={[handleX, 0, effD / 2 + 0.9]}
-                castShadow
-                onClick={handleClick}
-              >
-                <boxGeometry args={[0.9, Math.min(14, effH * 0.28), 1.4]} />
-                <meshStandardMaterial
-                  color={isSketch ? '#f8fafc' : '#cbd5e1'}
-                  metalness={isSketch ? 0 : 0.75}
-                  roughness={isSketch ? 0.9 : 0.28}
-                />
-                {sketchSubEdges}
-              </mesh>
-            )}
+            <PanelHandle
+              config={handleConfig}
+              faceWidth={effW}
+              faceHeight={effH}
+              frontZ={effD / 2}
+              panelDepth={effD}
+              isSketch={isSketch}
+              onClick={handleClick}
+            />
           </group>
         </group>
       )
@@ -285,7 +279,6 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       const effW = Math.max(2, width - clearance * 2)
       const effH = Math.max(2, height - clearance * 2)
       const effD = depth
-      const handleX = panel.hingeSide === 'right' ? effW / 2 - 2.5 : -effW / 2 + 2.5
 
       return (
         <group ref={animRef}>
@@ -306,21 +299,15 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               opacity={edgeOpacity}
             />
           </mesh>
-          {hasHandle && (
-            <mesh
-              position={[handleX, 0, effD / 2 + 0.35]}
-              castShadow
-              onClick={handleClick}
-            >
-              <boxGeometry args={[1.1, Math.min(18, effH * 0.32), 0.6]} />
-              <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#94a3b8'}
-                metalness={isSketch ? 0 : 0.7}
-                roughness={isSketch ? 0.9 : 0.32}
-              />
-              {sketchSubEdges}
-            </mesh>
-          )}
+          <PanelHandle
+            config={handleConfig}
+            faceWidth={effW}
+            faceHeight={effH}
+            frontZ={effD / 2}
+            panelDepth={effD}
+            isSketch={isSketch}
+            onClick={handleClick}
+          />
         </group>
       )
     }
@@ -358,21 +345,15 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
           </mesh>
 
           {/* المقبض */}
-          {hasHandle && (
-            <mesh
-              position={[0, 0, depth / 2 + 0.9]}
-              castShadow
-              onClick={handleClick}
-            >
-              <boxGeometry args={[Math.min(16, effW * 0.32), 0.9, 1.4]} />
-              <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#cbd5e1'}
-                metalness={isSketch ? 0 : 0.75}
-                roughness={isSketch ? 0.9 : 0.28}
-              />
-              {sketchSubEdges}
-            </mesh>
-          )}
+          <PanelHandle
+            config={handleConfig}
+            faceWidth={effW}
+            faceHeight={effH}
+            frontZ={depth / 2}
+            panelDepth={frontThick}
+            isSketch={isSketch}
+            onClick={handleClick}
+          />
 
           {/* صندوق الدرج الداخلي */}
           <group position={[0, -0.6, boxCenterZ]}>
