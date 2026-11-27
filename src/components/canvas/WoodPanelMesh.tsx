@@ -1,19 +1,26 @@
 import { Edges } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { MATERIALS } from '../../constants/materials'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { FurniturePanel } from '../../types/furniture'
 import { getWoodTexture } from '../../utils/woodTextures'
+import type { TapePanelHandlers } from './TapeMeasureTool'
 
 interface WoodPanelMeshProps {
   panel: FurniturePanel
   isSelected: boolean
   registerObject: (id: string, obj: THREE.Object3D | null) => void
+  tapeHandlersRef: MutableRefObject<TapePanelHandlers | null>
 }
 
-export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMeshProps) {
+export function WoodPanelMesh({
+  panel,
+  isSelected,
+  registerObject,
+  tapeHandlersRef,
+}: WoodPanelMeshProps) {
   const groupRef = useRef<THREE.Group | null>(null)
   const animRef = useRef<THREE.Group | null>(null)
 
@@ -84,6 +91,36 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
     e.stopPropagation()
     if (useDesignStore.getState().toolMode === 'tape') return
     selectPanel(panel.id, e.shiftKey || e.ctrlKey || e.metaKey)
+  }
+
+  const isIgnoredHelperHit = (e: ThreeEvent<PointerEvent>): boolean => {
+    const mat = (e.object as THREE.Mesh).material as THREE.Material | undefined
+    return Boolean(mat && mat.transparent && mat.opacity === 0)
+  }
+
+  const handleTapePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (useDesignStore.getState().toolMode !== 'tape') return
+    if (isIgnoredHelperHit(e)) return
+    tapeHandlersRef.current?.onPanelPointerDown(panel, e)
+  }
+
+  const handleTapePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (useDesignStore.getState().toolMode !== 'tape') return
+    if (isIgnoredHelperHit(e)) return
+    tapeHandlersRef.current?.onPanelPointerMove(panel, e)
+  }
+
+  const handleTapePointerOut = () => {
+    if (useDesignStore.getState().toolMode !== 'tape') return
+    tapeHandlersRef.current?.onPanelPointerOut()
+  }
+
+  const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {
+    if (useDesignStore.getState().toolMode === 'tape') return
+    e.stopPropagation()
+    if (!useDesignStore.getState().selectedPanelIds.includes(panel.id)) {
+      selectPanel(panel.id)
+    }
   }
 
   const edgeColor = isSelected ? '#fbbf24' : '#0f172a'
@@ -474,7 +511,16 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
   }
 
   return (
-    <group ref={groupRef} name={panel.id} position={panel.position} rotation={panel.rotation}>
+    <group
+      ref={groupRef}
+      name={panel.id}
+      position={panel.position}
+      rotation={panel.rotation}
+      onPointerDown={handleTapePointerDown}
+      onPointerMove={handleTapePointerMove}
+      onPointerOut={handleTapePointerOut}
+      onContextMenu={handleContextMenu}
+    >
       {renderContent()}
     </group>
   )

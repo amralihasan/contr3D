@@ -177,6 +177,7 @@ interface DesignState {
   selectedPanelId: string | null
   selectedPanelIds: string[]
   multiSelectMode: boolean
+  clipboard: FurniturePanel[]
 
   toolMode: ToolMode
   tapeMode: TapeMode
@@ -239,11 +240,16 @@ interface DesignState {
   setIsDraggingHuman: (dragging: boolean) => void
   clearStatusToast: () => void
 
-  // Panel CRUD
+  // Panel CRUD & Clipboard
   addPresetPanel: (role: Exclude<PanelRole, 'custom'>) => void
   duplicatePanel: (id: string) => void
   deletePanel: (id: string) => void
   deleteSelectedPanels: () => void
+  copySelected: () => void
+  cutSelected: () => void
+  pasteClipboard: () => void
+  duplicateSelected: () => void
+  deleteSelected: () => void
 
   // Panel properties
   updatePanelDimension: (id: string, key: keyof PanelDimensions, value: number) => void
@@ -302,6 +308,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   selectedPanelId: null,
   selectedPanelIds: [],
   multiSelectMode: false,
+  clipboard: [],
 
   toolMode: 'select',
   tapeMode: 'guide',
@@ -422,6 +429,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set({
       activeReferenceEdge: edge,
       draftGuideDirection: edge ? edge.defaultDirection : 1,
+      draftGuideDistanceCm: edge ? 30 : get().draftGuideDistanceCm,
       selectedGuideId: null,
     }),
 
@@ -681,6 +689,105 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       past: pushPast(past, panels, guides),
       future: [],
     })
+  },
+
+  copySelected: () => {
+    const { panels, selectedPanelIds } = get()
+    if (selectedPanelIds.length === 0) return
+    const selected = panels.filter((p) => selectedPanelIds.includes(p.id))
+    if (selected.length === 0) return
+
+    set({
+      clipboard: structuredClone(selected),
+      statusToast:
+        selected.length === 1
+          ? `تم نسخ: ${selected[0].name}`
+          : `تم نسخ ${selected.length} عناصر إلى الحافظة`,
+    })
+  },
+
+  cutSelected: () => {
+    const { panels, guides, past, selectedPanelIds } = get()
+    if (selectedPanelIds.length === 0) return
+    const selected = panels.filter((p) => selectedPanelIds.includes(p.id))
+    if (selected.length === 0) return
+
+    const nextPanels = panels.filter((p) => !selectedPanelIds.includes(p.id))
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      clipboard: structuredClone(selected),
+      panels: nextPanels,
+      selectedPanelIds: [],
+      selectedPanelId: null,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast:
+        selected.length === 1
+          ? `تم قص: ${selected[0].name}`
+          : `تم قص ${selected.length} عناصر إلى الحافظة`,
+    })
+  },
+
+  pasteClipboard: () => {
+    const { clipboard, panels, guides, past } = get()
+    if (clipboard.length === 0) return
+
+    const pasted: FurniturePanel[] = clipboard.map((item) => ({
+      ...structuredClone(item),
+      id: createId('panel'),
+      name: item.name.endsWith('(نسخة)') ? item.name : `${item.name} (نسخة)`,
+      position: [roundTo(item.position[0] + 5, 2), item.position[1], item.position[2]],
+    }))
+
+    const pastedIds = pasted.map((p) => p.id)
+    const nextPanels = [...panels, ...pasted]
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      clipboard: structuredClone(pasted),
+      toolMode: 'select',
+      selectedPanelIds: pastedIds,
+      selectedPanelId: pastedIds[pastedIds.length - 1] ?? null,
+      selectedGuideId: null,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast:
+        pasted.length === 1
+          ? `تم لصق: ${pasted[0].name}`
+          : `تم لصق ${pasted.length} عناصر`,
+    })
+  },
+
+  duplicateSelected: () => {
+    const { panels, guides, past, selectedPanelIds } = get()
+    if (selectedPanelIds.length === 0) return
+    const selected = panels.filter((p) => selectedPanelIds.includes(p.id))
+    if (selected.length === 0) return
+
+    const copies: FurniturePanel[] = selected.map((item) => ({
+      ...structuredClone(item),
+      id: createId('panel'),
+      name: item.name.endsWith('(نسخة)') ? item.name : `${item.name} (نسخة)`,
+      position: [roundTo(item.position[0] + 5, 2), item.position[1], item.position[2]],
+    }))
+
+    const copyIds = copies.map((c) => c.id)
+    const nextPanels = [...panels, ...copies]
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      selectedPanelIds: copyIds,
+      selectedPanelId: copyIds[copyIds.length - 1] ?? null,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  deleteSelected: () => {
+    get().deleteSelectedPanels()
   },
 
   updatePanelDimension: (id, key, value) => {

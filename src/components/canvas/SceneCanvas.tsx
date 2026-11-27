@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type * as THREE from 'three'
 import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole } from '../../types/furniture'
@@ -8,7 +8,7 @@ import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
 import { HumanReference } from './HumanReference'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
-import { TapeMeasureTool } from './TapeMeasureTool'
+import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
 
@@ -24,6 +24,7 @@ export function SceneCanvas() {
   const selectGuide = useDesignStore((s) => s.selectGuide)
 
   const [objectMap, setObjectMap] = useState<Record<string, THREE.Object3D>>({})
+  const tapeHandlersRef = useRef<TapePanelHandlers | null>(null)
 
   const visiblePanels = interfacesHidden
     ? panels.filter((p) => !isInterfaceRole(p.role))
@@ -77,15 +78,16 @@ export function SceneCanvas() {
             <WoodPanelMesh
               key={panel.id}
               panel={panel}
-              isSelected={selectedPanelIds.includes(panel.id)}
+              isSelected={toolMode === 'select' && selectedPanelIds.includes(panel.id)}
               registerObject={registerObject}
+              tapeHandlersRef={tapeHandlersRef}
             />
           ))}
         </group>
 
         <GuideLines3D />
         <HumanReference />
-        <TapeMeasureTool objectMap={objectMap} />
+        <TapeMeasureTool objectMap={objectMap} handlersRef={tapeHandlersRef} />
         <DimensionsOverlay3D />
         <PanelTransformGizmo selectedObject={selectedObject} />
       </Canvas>

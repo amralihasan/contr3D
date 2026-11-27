@@ -270,7 +270,7 @@ export function buildGuideLineGeometry(
   const safeDist = Math.max(0, roundTo(params.distanceCm, 2))
   const worldCoord = roundTo(params.referenceEdgeCoord + params.direction * safeDist, 2)
   const extend = 4
-  const liftedSurface = params.surfaceCoord + params.surfaceSign * 0.2
+  const liftedSurface = params.surfaceCoord + params.surfaceSign * 0.15
   const spanMid = (params.spanMin + params.spanMax) / 2
 
   const spanStart = makeVec3OnAxes(

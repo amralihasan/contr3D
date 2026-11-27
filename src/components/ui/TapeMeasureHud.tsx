@@ -26,6 +26,8 @@ export function TapeMeasureHud() {
   const selectedGuide = guides.find((g) => g.id === selectedGuideId) ?? null
   const [editGuideDraft, setEditGuideDraft] = useState('')
   const [isEditingSelectedGuide, setIsEditingSelectedGuide] = useState(false)
+  const [draftInputText, setDraftInputText] = useState('')
+  const [isEditingDraftInput, setIsEditingDraftInput] = useState(false)
 
   return (
     <>
@@ -111,13 +113,29 @@ export function TapeMeasureHud() {
                   step="0.5"
                   min={0}
                   max={400}
-                  value={draftGuideDistanceCm}
+                  value={isEditingDraftInput ? draftInputText : String(draftGuideDistanceCm)}
+                  onFocus={() => {
+                    setDraftInputText(String(draftGuideDistanceCm))
+                    setIsEditingDraftInput(true)
+                  }}
                   onChange={(e) => {
-                    const v = Number.parseFloat(e.target.value)
-                    setDraftGuideParams(Number.isFinite(v) ? v : 0, draftGuideDirection)
+                    const txt = e.target.value
+                    setDraftInputText(txt)
+                    const v = Number.parseFloat(txt)
+                    if (Number.isFinite(v)) {
+                      setDraftGuideParams(v, draftGuideDirection)
+                    }
+                  }}
+                  onBlur={() => {
+                    setIsEditingDraftInput(false)
+                    const v = Number.parseFloat(draftInputText)
+                    if (Number.isFinite(v)) {
+                      setDraftGuideParams(v, draftGuideDirection)
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
+                      setIsEditingDraftInput(false)
                       commitDraftGuide()
                     }
                   }}
