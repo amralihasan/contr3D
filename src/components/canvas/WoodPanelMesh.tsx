@@ -36,6 +36,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
   const renderMode = useDesignStore((s) => s.renderMode)
   const isSketch = renderMode === 'sketch'
+  const isEcommerceWhite = renderMode === 'ecommerce_white'
+  const isEcommerceExport = useDesignStore((s) => s.exportMode === 'ecommerce')
   const isSelected = useDesignStore(
     (s) =>
       !s.isExporting &&
@@ -178,9 +180,17 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     }
   }
 
-  const edgeColor = isSketch ? '#1e293b' : isSelected ? '#fbbf24' : '#0f172a'
-  const edgeWidth = isSketch ? 1.6 : isSelected ? 2.6 : 0.8
-  const edgeOpacity = isSketch ? 1 : isSelected ? 1 : 0.22
+  const edgeColor = isSketch
+    ? '#1e293b'
+    : isEcommerceWhite
+      ? '#e2e8f0'
+      : isEcommerceExport
+        ? '#cbd5e1'
+        : isSelected
+          ? '#fbbf24'
+          : '#0f172a'
+  const edgeWidth = isSketch ? 1.6 : isEcommerceWhite ? 1.3 : isSelected ? 2.6 : 0.8
+  const edgeOpacity = isSketch ? 1 : isEcommerceWhite ? 1 : isSelected ? 1 : 0.22
 
   // إزاحة خفيفة متدرجة حسب نوع العنصر لمنع التداخل البصري (Z-Fighting) عند التقاء الأسطح المتطابقة
   const polyOffsetByRole: Record<FurniturePanel['role'], number> = {
@@ -206,7 +216,9 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const polyOffset = polyOffsetByRole[panel.role] ?? 1
   const materialKey = isSketch
     ? 'sketch-mat'
-    : `${panel.materialId}-${texture ? 'tex' : 'solid'}`
+    : isEcommerceWhite
+      ? 'ecommerce-white-mat'
+      : `${panel.materialId}-${texture ? 'tex' : 'solid'}`
 
   const mainMaterialProps = isSketch
     ? {
@@ -220,17 +232,29 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
         polygonOffsetFactor: polyOffset,
         polygonOffsetUnits: polyOffset,
       }
-    : {
-        color: texture ? '#ffffff' : matSpec.color,
-        map: texture ?? null,
-        roughness: matSpec.roughness,
-        metalness: matSpec.metalness,
-        emissive: '#000000',
-        emissiveIntensity: 0,
-        polygonOffset: true,
-        polygonOffsetFactor: polyOffset,
-        polygonOffsetUnits: polyOffset,
-      }
+    : isEcommerceWhite
+      ? {
+          color: '#f8f9fa',
+          map: null,
+          roughness: 0.85,
+          metalness: 0.0,
+          emissive: '#000000',
+          emissiveIntensity: 0,
+          polygonOffset: true,
+          polygonOffsetFactor: polyOffset,
+          polygonOffsetUnits: polyOffset,
+        }
+      : {
+          color: texture ? '#ffffff' : matSpec.color,
+          map: texture ?? null,
+          roughness: matSpec.roughness,
+          metalness: matSpec.metalness,
+          emissive: '#000000',
+          emissiveIntensity: 0,
+          polygonOffset: true,
+          polygonOffsetFactor: polyOffset,
+          polygonOffsetUnits: polyOffset,
+        }
 
   const sketchSubEdges = isSketch ? (
     <Edges threshold={15} color="#1e293b" lineWidth={1.5} />
@@ -375,8 +399,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
             >
               <boxGeometry args={[boxWall, boxH, boxD]} />
               <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#dfd6c7'}
-                roughness={isSketch ? 0.9 : 0.65}
+                color={isSketch ? '#f8fafc' : isEcommerceWhite ? '#f8f9fa' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : isEcommerceWhite ? 0.85 : 0.65}
               />
               {sketchSubEdges}
             </mesh>
@@ -389,8 +413,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
             >
               <boxGeometry args={[boxWall, boxH, boxD]} />
               <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#dfd6c7'}
-                roughness={isSketch ? 0.9 : 0.65}
+                color={isSketch ? '#f8fafc' : isEcommerceWhite ? '#f8f9fa' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : isEcommerceWhite ? 0.85 : 0.65}
               />
               {sketchSubEdges}
             </mesh>
@@ -403,8 +427,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
             >
               <boxGeometry args={[Math.max(1, boxW - boxWall * 2), boxH, boxWall]} />
               <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#dfd6c7'}
-                roughness={isSketch ? 0.9 : 0.65}
+                color={isSketch ? '#f8fafc' : isEcommerceWhite ? '#f8f9fa' : '#dfd6c7'}
+                roughness={isSketch ? 0.9 : isEcommerceWhite ? 0.85 : 0.65}
               />
               {sketchSubEdges}
             </mesh>
@@ -417,8 +441,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
             >
               <boxGeometry args={[Math.max(1, boxW - boxWall * 2), 0.8, boxD]} />
               <meshStandardMaterial
-                color={isSketch ? '#f8fafc' : '#cfc4b2'}
-                roughness={isSketch ? 0.9 : 0.7}
+                color={isSketch ? '#f8fafc' : isEcommerceWhite ? '#f8f9fa' : '#cfc4b2'}
+                roughness={isSketch ? 0.9 : isEcommerceWhite ? 0.85 : 0.7}
               />
               {sketchSubEdges}
             </mesh>
@@ -440,6 +464,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
           polyOffset={polyOffset}
           isSelected={isSelected}
           isSketch={isSketch}
+          isWhiteStudio={isEcommerceWhite}
           edgeColor={edgeColor}
           edgeWidth={edgeWidth}
           edgeOpacity={edgeOpacity}

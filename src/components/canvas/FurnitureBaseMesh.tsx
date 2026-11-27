@@ -14,6 +14,7 @@ interface FurnitureBaseMeshProps {
   polyOffset: number
   isSelected: boolean
   isSketch: boolean
+  isWhiteStudio?: boolean
   edgeColor: string
   edgeWidth: number
   edgeOpacity: number
@@ -87,6 +88,7 @@ export function FurnitureBaseMesh({
   polyOffset,
   isSelected,
   isSketch,
+  isWhiteStudio = false,
   edgeColor,
   edgeWidth,
   edgeOpacity,
@@ -104,20 +106,32 @@ export function FurnitureBaseMesh({
         polygonOffsetFactor: polyOffset,
         polygonOffsetUnits: polyOffset,
       }
-    : {
-        color: woodColor,
-        map: woodMap,
-        roughness: woodRoughness,
-        metalness: woodMetalness,
-        polygonOffset: true,
-        polygonOffsetFactor: polyOffset,
-        polygonOffsetUnits: polyOffset,
-      }
+    : isWhiteStudio
+      ? {
+          color: '#f8f9fa',
+          map: null,
+          roughness: 0.85,
+          metalness: 0,
+          polygonOffset: true,
+          polygonOffsetFactor: polyOffset,
+          polygonOffsetUnits: polyOffset,
+        }
+      : {
+          color: woodColor,
+          map: woodMap,
+          roughness: woodRoughness,
+          metalness: woodMetalness,
+          polygonOffset: true,
+          polygonOffsetFactor: polyOffset,
+          polygonOffsetUnits: polyOffset,
+        }
 
   const metalHex = panel.metalColor
     ? METAL_COLOR_HEX[panel.metalColor]
     : panel.role === 'metal_legs'
-      ? woodColor
+      ? isWhiteStudio
+        ? '#94a3b8'
+        : woodColor
       : METAL_COLOR_HEX.matte_black
 
   const metalMatProps = isSketch

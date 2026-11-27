@@ -26,7 +26,7 @@ function SingleGuide({ guide, isSelected, onSelect }: SingleGuideProps) {
   }, [guide.spanStart, guide.spanEnd])
 
   return (
-    <group>
+    <group name="workspace-guides-group">
       <Line
         points={[guide.spanStart, guide.spanEnd]}
         color={isSelected ? '#fbbf24' : '#22d3ee'}
@@ -125,7 +125,7 @@ export function GuideLines3D() {
   if (isExporting) return null
 
   return (
-    <group>
+    <group name="workspace-guides-group">
       {guidesVisible &&
         guides.map((guide) => (
           <SingleGuide

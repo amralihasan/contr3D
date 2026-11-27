@@ -15,6 +15,7 @@ const BASE_ADULT_HEIGHT_CM = 175
 export function HumanReference() {
   const showHumanReference = useDesignStore((s) => s.showHumanReference)
   const renderMode = useDesignStore((s) => s.renderMode)
+  const isExporting = useDesignStore((s) => s.isExporting)
   const humanScalePreset = useDesignStore((s) => s.humanScalePreset)
   const humanPosition = useDesignStore((s) => s.humanPosition)
   const toolMode = useDesignStore((s) => s.toolMode)
@@ -68,7 +69,7 @@ export function HumanReference() {
     }
   }, [camera, gl, floorPlane, setHumanPosition, setIsDraggingHuman])
 
-  if (!showHumanReference || renderMode === 'sketch') return null
+  if (!showHumanReference || renderMode === 'sketch' || isExporting) return null
 
   const targetHeight = HUMAN_SCALE_HEIGHTS_CM[humanScalePreset]
   const scale = targetHeight / BASE_ADULT_HEIGHT_CM
@@ -92,6 +93,7 @@ export function HumanReference() {
 
   return (
     <group
+      name="workspace-human-group"
       position={[humanPosition[0], 0, humanPosition[1]]}
       scale={[scale, scale, scale]}
       onPointerDown={handlePointerDown}

@@ -5,6 +5,8 @@ import * as THREE from 'three'
 import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole, type CameraPreset } from '../../types/furniture'
+import { computeOverallDimensions } from '../../utils/dimensions'
+import { registerEcommerceCapturer } from '../../utils/ecommerceExport'
 import { exportSketchWithDimensions } from '../../utils/sketchExport'
 import { registerThumbnailCapturer } from '../../utils/thumbnail'
 import { CameraRig } from './CameraRig'
@@ -57,6 +59,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function nextAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+}
+
 function ExportCaptureController() {
   const { gl, scene, camera, get } = useThree()
   const exportRequestTick = useDesignStore((s) => s.exportRequestTick)
@@ -88,10 +96,194 @@ function ExportCaptureController() {
       return out.toDataURL('image/jpeg', 0.78)
     })
 
+    registerEcommerceCapturer(async (options) => {
+      const state = useDesignStore.getState()
+      const visiblePanels = state.interfacesHidden
+        ? state.panels.filter((p) => !isInterfaceRole(p.role))
+        : state.panels
+
+      const overall = computeOverallDimensions(visiblePanels)
+      if (!overall) return null
+
+      const outW = options.width ?? 2000
+      const outH = options.height ?? 1200
+
+      const prevIsExporting = state.isExporting
+      const prevExportMode = state.exportMode
+      const prevRenderMode = state.renderMode
+
+      useDesignStore.setState({
+        isExporting: true,
+        exportMode: 'ecommerce',
+        renderMode: options.whitePiece ? 'ecommerce_white' : 'normal',
+      })
+
+      await nextAnimationFrame()
+      await nextAnimationFrame()
+      await sleep(24)
+      await nextAnimationFrame()
+
+      const controls = get().controls as {
+        target?: THREE.Vector3
+        update?: () => void
+      } | null
+
+      const perspCam = camera as THREE.PerspectiveCamera
+      const prevSize = gl.getSize(new THREE.Vector2())
+      const prevDpr = gl.getPixelRatio()
+      const prevBg = scene.background
+      const prevFog = scene.fog
+      const prevClearColor = gl.getClearColor(new THREE.Color())
+      const prevClearAlpha = gl.getClearAlpha()
+      const prevCamPos = camera.position.clone()
+      const prevCamQuat = camera.quaternion.clone()
+      const prevCamAspect = perspCam.aspect
+      const prevTarget = controls?.target
+        ? controls.target.clone()
+        : new THREE.Vector3(0, 40, 0)
+
+      const visibilityRestores: { obj: THREE.Object3D; prevVisible: boolean }[] = []
+      const hiddenNames = new Set([
+        'workspace-grid-group',
+        'workspace-solid-floor',
+        'workspace-guides-group',
+        'workspace-human-group',
+        'workspace-dimensions-group',
+      ])
+
+      try {
+        // إخفاء الشبكة والأرضية الداكنة وأدوات المساعدة مباشرة على شجرة Three.js لحظة الالتقاط
+        scene.traverse((obj) => {
+          if (hiddenNames.has(obj.name) || obj instanceof THREE.GridHelper) {
+            visibilityRestores.push({ obj, prevVisible: obj.visible })
+            obj.visible = false
+          }
+        })
+
+        const target = new THREE.Vector3(
+          (overall.minX + overall.maxX) / 2,
+          (overall.minY + overall.maxY) / 2,
+          (overall.minZ + overall.maxZ) / 2
+        )
+
+        let dir: THREE.Vector3
+        if (options.cameraAngle === 'current') {
+          dir = prevCamPos.clone().sub(prevTarget)
+          if (dir.lengthSq() < 1) {
+            const fallback = CAMERA_PRESETS.perspective
+            dir = new THREE.Vector3(...fallback.position).sub(
+              new THREE.Vector3(...fallback.target)
+            )
+          }
+        } else {
+          const presetCfg = CAMERA_PRESETS[options.cameraAngle]
+          dir = new THREE.Vector3(...presetCfg.position).sub(
+            new THREE.Vector3(...presetCfg.target)
+          )
+        }
+        dir.normalize()
+
+        const worldUp =
+          Math.abs(dir.y) > 0.99 ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0)
+        const camRight = new THREE.Vector3().crossVectors(worldUp, dir).normalize()
+        const camUp = new THREE.Vector3().crossVectors(dir, camRight).normalize()
+
+        const corners = [
+          new THREE.Vector3(overall.minX, overall.minY, overall.minZ),
+          new THREE.Vector3(overall.maxX, overall.minY, overall.minZ),
+          new THREE.Vector3(overall.minX, overall.maxY, overall.minZ),
+          new THREE.Vector3(overall.maxX, overall.maxY, overall.minZ),
+          new THREE.Vector3(overall.minX, overall.minY, overall.maxZ),
+          new THREE.Vector3(overall.maxX, overall.minY, overall.maxZ),
+          new THREE.Vector3(overall.minX, overall.maxY, overall.maxZ),
+          new THREE.Vector3(overall.maxX, overall.maxY, overall.maxZ),
+        ]
+
+        let maxHalfX = 1
+        let maxHalfY = 1
+        let maxHalfZ = 1
+        for (const corner of corners) {
+          const offset = corner.sub(target)
+          maxHalfX = Math.max(maxHalfX, Math.abs(offset.dot(camRight)))
+          maxHalfY = Math.max(maxHalfY, Math.abs(offset.dot(camUp)))
+          maxHalfZ = Math.max(maxHalfZ, Math.abs(offset.dot(dir)))
+        }
+
+        const aspect = outW / outH
+        const fovRad = THREE.MathUtils.degToRad(perspCam.fov || 42)
+        const tanHalfFov = Math.tan(fovRad / 2)
+        const distY = maxHalfY / (0.58 * tanHalfFov)
+        const distX = maxHalfX / (0.6 * tanHalfFov * aspect)
+        const dist = Math.max(60, Math.max(distX, distY) + maxHalfZ * 0.6)
+
+        camera.position.copy(target).addScaledVector(dir, dist)
+        camera.lookAt(target)
+        perspCam.aspect = aspect
+        perspCam.updateProjectionMatrix()
+        camera.updateMatrixWorld()
+
+        scene.background = new THREE.Color('#ffffff')
+        scene.fog = null
+        gl.setClearColor('#ffffff', 1)
+        gl.setPixelRatio(1)
+        gl.setSize(outW, outH, false)
+        gl.clear(true, true, true)
+        gl.render(scene, camera)
+
+        const baseCanvas = document.createElement('canvas')
+        baseCanvas.width = outW
+        baseCanvas.height = outH
+        const baseCtx = baseCanvas.getContext('2d')
+        if (!baseCtx) return null
+        baseCtx.fillStyle = '#ffffff'
+        baseCtx.fillRect(0, 0, outW, outH)
+        baseCtx.drawImage(gl.domElement, 0, 0, outW, outH)
+
+        const cameraSnapshot = perspCam.clone()
+        cameraSnapshot.aspect = aspect
+        cameraSnapshot.updateProjectionMatrix()
+        cameraSnapshot.updateMatrixWorld()
+
+        return {
+          baseCanvas,
+          camera: cameraSnapshot,
+          panels: visiblePanels,
+          width: outW,
+          height: outH,
+        }
+      } finally {
+        for (const entry of visibilityRestores) {
+          entry.obj.visible = entry.prevVisible
+        }
+        gl.setPixelRatio(prevDpr)
+        gl.setSize(prevSize.x, prevSize.y, false)
+        scene.background = prevBg
+        scene.fog = prevFog
+        gl.setClearColor(prevClearColor, prevClearAlpha)
+        camera.position.copy(prevCamPos)
+        camera.quaternion.copy(prevCamQuat)
+        perspCam.aspect = prevCamAspect
+        perspCam.updateProjectionMatrix()
+        if (controls?.target) {
+          controls.target.copy(prevTarget)
+          controls.update?.()
+        }
+        camera.updateMatrixWorld()
+        gl.render(scene, camera)
+
+        useDesignStore.setState({
+          isExporting: prevIsExporting,
+          exportMode: prevExportMode,
+          renderMode: prevRenderMode,
+        })
+      }
+    })
+
     return () => {
       registerThumbnailCapturer(null)
+      registerEcommerceCapturer(null)
     }
-  }, [gl, scene, camera])
+  }, [gl, scene, camera, get])
 
   useEffect(() => {
     if (exportRequestTick === 0) return

@@ -27,7 +27,7 @@ function StaticFloorGrid() {
   }, [])
 
   return (
-    <group>
+    <group name="workspace-grid-group">
       {/* شبكة القياس الدقيقة: كل 10 سم مربع */}
       <gridHelper
         ref={minorGridRef}
@@ -52,9 +52,10 @@ export function WorkspaceGrid() {
   const exportMode = useDesignStore((s) => s.exportMode)
   const renderMode = useDesignStore((s) => s.renderMode)
   const isSketch = renderMode === 'sketch'
+  const isEcommerce = exportMode === 'ecommerce'
   const isCleanExport = exportMode === 'clean' || exportMode === 'three_angles'
   const isTransparentExport = exportMode === 'transparent'
-  const showSolidFloor = !isTransparentExport && !isSketch
+  const showSolidFloor = !isTransparentExport && !isSketch && !isEcommerce
   const showGrid = !exportMode && !isSketch
 
   return (
@@ -63,26 +64,27 @@ export function WorkspaceGrid() {
       {!isTransparentExport && (
         <color
           attach="background"
-          args={[isSketch ? '#ffffff' : isCleanExport ? '#f1f5f9' : '#0f172a']}
+          args={[isSketch || isEcommerce ? '#ffffff' : isCleanExport ? '#f1f5f9' : '#0f172a']}
         />
       )}
       {!exportMode && !isSketch && <fog attach="fog" args={['#0f172a', 420, 880]} />}
 
-      <ambientLight intensity={isSketch ? 0.72 : isCleanExport ? 0.55 : 0.45} />
+      <ambientLight intensity={isEcommerce ? 0.88 : isSketch ? 0.72 : isCleanExport ? 0.55 : 0.45} />
       <hemisphereLight
         args={[
-          '#f8fafc',
-          isSketch ? '#cbd5e1' : '#1e293b',
-          isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55,
+          '#ffffff',
+          isEcommerce ? '#e2e8f0' : isSketch ? '#cbd5e1' : '#1e293b',
+          isEcommerce ? 0.65 : isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55,
         ]}
       />
 
       <directionalLight
         position={[140, 220, 160]}
-        intensity={isSketch ? 0.75 : 1.35}
+        intensity={isEcommerce ? 0.95 : isSketch ? 0.75 : 1.35}
         castShadow={!isSketch}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
+        shadow-radius={isEcommerce ? 4 : 2}
         shadow-camera-near={10}
         shadow-camera-far={650}
         shadow-camera-left={-220}
@@ -93,8 +95,8 @@ export function WorkspaceGrid() {
 
       <directionalLight
         position={[-140, 110, -120]}
-        intensity={isSketch ? 0.35 : 0.4}
-        color="#cbd5e1"
+        intensity={isEcommerce ? 0.42 : isSketch ? 0.35 : 0.4}
+        color={isEcommerce ? '#f8fafc' : '#cbd5e1'}
       />
 
       {/* بيئة إضاءة محلية بدون تحميل ملفات خارجية */}
@@ -127,6 +129,7 @@ export function WorkspaceGrid() {
       {/* أرضية مصمتة وواسعة غير لامعة تستقبل الظلال بثبات بدون وميض */}
       {showSolidFloor && (
         <mesh
+          name="workspace-solid-floor"
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, -0.04, 0]}
           receiveShadow
@@ -141,16 +144,17 @@ export function WorkspaceGrid() {
         </mesh>
       )}
 
-      {/* ظل خفيف فقط عند التصدير الشفاف بدون خلفية مصمتة */}
-      {isTransparentExport && (
+      {/* ظل خفيف فقط عند التصدير الشفاف أو استوديو المتجر الأبيض بدون خلفية رمادية */}
+      {(isTransparentExport || isEcommerce) && (
         <mesh
+          name="workspace-shadow-floor"
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, -0.02, 0]}
           receiveShadow
           raycast={noopRaycast}
         >
-          <planeGeometry args={[1200, 1200]} />
-          <shadowMaterial transparent opacity={0.24} />
+          <planeGeometry args={[1800, 1800]} />
+          <shadowMaterial transparent opacity={isEcommerce ? 0.11 : 0.24} />
         </mesh>
       )}
 

@@ -32,6 +32,7 @@ import { useDesignStore } from '../../store/useDesignStore'
 interface TopToolbarProps {
   onOpenDesignsModal: () => void
   onOpenWorkshopReport: () => void
+  onOpenEcommerceExport: () => void
   onTogglePartsDrawer: () => void
   onTogglePropsDrawer: () => void
   onLockApp: () => void
@@ -42,6 +43,7 @@ interface TopToolbarProps {
 export function TopToolbar({
   onOpenDesignsModal,
   onOpenWorkshopReport,
+  onOpenEcommerceExport,
   onTogglePartsDrawer,
   onTogglePropsDrawer,
   onLockApp,
@@ -401,6 +403,17 @@ export function TopToolbar({
         >
           <ClipboardList className="h-4 w-4 text-emerald-300" />
           <span className="hidden xl:inline">تقرير الورشة</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isExporting}
+          onClick={onOpenEcommerceExport}
+          className="flex h-9 items-center gap-1.5 rounded-xl border border-indigo-400/45 bg-indigo-500/15 px-2.5 text-xs font-bold text-indigo-200 transition hover:bg-indigo-500/25 active:scale-[0.98] disabled:opacity-50"
+          title="تصدير صورة مقاسات للمتجر بخلفية بيضاء"
+        >
+          <Camera className="h-4 w-4 text-indigo-300" />
+          <span className="hidden lg:inline">صورة للمتجر</span>
         </button>
 
         {/* تصدير صورة (4 خيارات) */}

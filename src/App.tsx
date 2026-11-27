@@ -9,6 +9,7 @@ import { SceneCanvas } from './components/canvas/SceneCanvas'
 import { ViewportOverlay } from './components/canvas/ViewportOverlay'
 import { AuthGate } from './components/ui/AuthGate'
 import { DesignsModal } from './components/ui/DesignsModal'
+import { EcommerceExportModal } from './components/ui/EcommerceExportModal'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
@@ -24,6 +25,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   useAutoSave()
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
+  const [ecommerceExportOpen, setEcommerceExportOpen] = useState(false)
   const [mobilePartsOpen, setMobilePartsOpen] = useState(false)
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
@@ -71,7 +73,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
 
       if (isInput) return
 
-      if (e.key === 'Tab' && !designsModalOpen && !workshopReportOpen) {
+      if (e.key === 'Tab' && !designsModalOpen && !workshopReportOpen && !ecommerceExportOpen) {
         e.preventDefault()
         toggleFocusMode()
         return
@@ -158,6 +160,8 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
       if (e.key === 'Escape') {
         if (contextMenuPos) {
           setContextMenuPos(null)
+        } else if (ecommerceExportOpen) {
+          setEcommerceExportOpen(false)
         } else if (workshopReportOpen) {
           setWorkshopReportOpen(false)
         } else if (designsModalOpen) {
@@ -197,6 +201,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     activeReferenceEdge,
     designsModalOpen,
     workshopReportOpen,
+    ecommerceExportOpen,
     contextMenuPos,
   ])
 
@@ -208,6 +213,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
       <TopToolbar
         onOpenDesignsModal={() => setDesignsModalOpen(true)}
         onOpenWorkshopReport={() => setWorkshopReportOpen(true)}
+        onOpenEcommerceExport={() => setEcommerceExportOpen(true)}
         onTogglePartsDrawer={() => {
           setMobilePartsOpen((v) => !v)
           setMobilePropsOpen(false)
@@ -373,6 +379,10 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
       <WorkshopReportModal
         open={workshopReportOpen}
         onClose={() => setWorkshopReportOpen(false)}
+      />
+      <EcommerceExportModal
+        open={ecommerceExportOpen}
+        onClose={() => setEcommerceExportOpen(false)}
       />
     </div>
   )

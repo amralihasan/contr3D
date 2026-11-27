@@ -181,8 +181,8 @@ const EMPTY_DESIGN_SIGNATURE = computeDesignSignature([], [])
 const initialUiPrefs = loadUiPreferences()
 const initialSavedDesigns = loadSavedDesigns()
 
-export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch'
-export type RenderMode = 'normal' | 'sketch'
+export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch' | 'ecommerce'
+export type RenderMode = 'normal' | 'sketch' | 'ecommerce_white'
 
 interface DesignState {
   panels: FurniturePanel[]

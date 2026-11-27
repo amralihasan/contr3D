@@ -20,7 +20,7 @@ function DimensionLine({ start, end, label, color, badgeClassName }: DimensionLi
   ]
 
   return (
-    <group>
+    <group name="workspace-dimensions-group">
       <Line points={[start, end]} color={color} lineWidth={1.8} />
       <Html position={mid} center distanceFactor={210} zIndexRange={[5, 0]}>
         <div
@@ -66,7 +66,7 @@ export function DimensionsOverlay3D() {
   const floorY = 0.6
 
   return (
-    <group>
+    <group name="workspace-dimensions-group">
       {/* العرض الكلي (X) */}
       <DimensionLine
         start={[overall.minX, floorY, overall.maxZ + offset]}
