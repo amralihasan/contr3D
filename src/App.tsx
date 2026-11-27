@@ -7,6 +7,7 @@ import {
 import { useEffect, useState } from 'react'
 import { SceneCanvas } from './components/canvas/SceneCanvas'
 import { ViewportOverlay } from './components/canvas/ViewportOverlay'
+import { AuthGate } from './components/ui/AuthGate'
 import { DesignsModal } from './components/ui/DesignsModal'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
@@ -15,8 +16,9 @@ import { TapeMeasureHud } from './components/ui/TapeMeasureHud'
 import { TopToolbar } from './components/ui/TopToolbar'
 import { WorkshopReportModal } from './components/ui/WorkshopReportModal'
 import { useDesignStore } from './store/useDesignStore'
+import { checkStoredAuthSession, clearAuthSession } from './utils/auth'
 
-export function App() {
+function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [mobilePartsOpen, setMobilePartsOpen] = useState(false)
@@ -196,6 +198,7 @@ export function App() {
           setMobilePropsOpen((v) => !v)
           setMobilePartsOpen(false)
         }}
+        onLockApp={onLock}
         isPartsOpen={mobilePartsOpen}
         isPropsOpen={mobilePropsOpen}
       />
@@ -352,6 +355,48 @@ export function App() {
         onClose={() => setWorkshopReportOpen(false)}
       />
     </div>
+  )
+}
+
+export function App() {
+  const [authStatus, setAuthStatus] = useState<'checking' | 'locked' | 'unlocked'>('checking')
+
+  useEffect(() => {
+    let active = true
+    checkStoredAuthSession()
+      .then((ok) => {
+        if (active) setAuthStatus(ok ? 'unlocked' : 'locked')
+      })
+      .catch(() => {
+        if (active) setAuthStatus('locked')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (authStatus === 'checking') {
+    return (
+      <div
+        dir="rtl"
+        className="flex min-h-dvh w-screen items-center justify-center bg-slate-950 text-sm text-slate-400"
+      >
+        جاري التحقق من الجلسة...
+      </div>
+    )
+  }
+
+  if (authStatus === 'locked') {
+    return <AuthGate onAuthenticated={() => setAuthStatus('unlocked')} />
+  }
+
+  return (
+    <WorkspaceApp
+      onLock={() => {
+        clearAuthSession()
+        setAuthStatus('locked')
+      }}
+    />
   )
 }
 

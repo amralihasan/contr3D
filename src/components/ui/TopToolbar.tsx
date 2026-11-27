@@ -12,6 +12,7 @@ import {
   ImageDown,
   Images,
   Layers,
+  Lock,
   Magnet,
   Maximize2,
   Minimize2,
@@ -32,6 +33,7 @@ interface TopToolbarProps {
   onOpenWorkshopReport: () => void
   onTogglePartsDrawer: () => void
   onTogglePropsDrawer: () => void
+  onLockApp: () => void
   isPartsOpen: boolean
   isPropsOpen: boolean
 }
@@ -41,6 +43,7 @@ export function TopToolbar({
   onOpenWorkshopReport,
   onTogglePartsDrawer,
   onTogglePropsDrawer,
+  onLockApp,
   isPartsOpen,
   isPropsOpen,
 }: TopToolbarProps) {
@@ -402,6 +405,16 @@ export function TopToolbar({
             </div>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={onLockApp}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-800/80 text-slate-300 transition hover:border-rose-500/50 hover:bg-rose-500/15 hover:text-rose-300 active:scale-[0.98]"
+          title="قفل التطبيق وتسجيل الخروج"
+          aria-label="قفل التطبيق"
+        >
+          <Lock className="h-4 w-4" />
+        </button>
 
         <button
           type="button"
