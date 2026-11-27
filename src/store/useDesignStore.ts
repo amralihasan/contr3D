@@ -45,6 +45,7 @@ import {
   saveUiPreferences,
 } from '../utils/storage'
 import { buildGuideLineGeometry, type ReferenceEdge } from '../utils/tapeMeasure'
+import { captureSceneThumbnail } from '../utils/thumbnail'
 
 const MAX_HISTORY = 50
 
@@ -183,8 +184,21 @@ function getInitialData() {
   }
 }
 
+function computeDesignSignature(panels: FurniturePanel[], guides: GuideLine[]): string {
+  return JSON.stringify({ panels, guides })
+}
+
 const initial = getInitialData()
 const initialUiPrefs = loadUiPreferences()
+const initialSavedDesigns = loadSavedDesigns()
+const matchedInitialSaved = initial.designId
+  ? initialSavedDesigns.find((d) => d.id === initial.designId)
+  : undefined
+const initialSavedSignature = matchedInitialSaved
+  ? computeDesignSignature(matchedInitialSaved.panels, matchedInitialSaved.guides ?? [])
+  : computeDesignSignature(initial.panels, initial.guides)
+const initialHasUnsavedChanges =
+  computeDesignSignature(initial.panels, initial.guides) !== initialSavedSignature
 
 export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch'
 export type RenderMode = 'normal' | 'sketch'
@@ -321,9 +335,16 @@ interface DesignState {
   currentDesignName: string
   savedDesigns: SavedDesign[]
   lastSavedAt: number | null
+  savedSignature: string
+  hasUnsavedChanges: boolean
   newEmptyDesign: () => void
   resetToStarterTemplate: () => void
   saveCurrentDesign: (name: string, asNew?: boolean) => SavedDesign
+  importDesignProject: (data: {
+    name: string
+    panels: FurniturePanel[]
+    guides: GuideLine[]
+  }) => SavedDesign
   loadDesign: (id: string) => void
   removeSavedDesign: (id: string) => void
 }
@@ -340,7 +361,46 @@ function pushPast(
   return next
 }
 
-export const useDesignStore = create<DesignState>((set, get) => ({
+export const useDesignStore = create<DesignState>((rawSet, get) => {
+  const set: typeof rawSet = (partial, replace) => {
+    const resolved =
+      typeof partial === 'function'
+        ? (partial as (state: DesignState) => Partial<DesignState> | DesignState)(get())
+        : partial
+
+    if (
+      resolved &&
+      typeof resolved === 'object' &&
+      ('panels' in resolved || 'guides' in resolved) &&
+      !('hasUnsavedChanges' in resolved)
+    ) {
+      const curr = get()
+      const nextPanels =
+        'panels' in resolved && resolved.panels !== undefined ? resolved.panels : curr.panels
+      const nextGuides =
+        'guides' in resolved && resolved.guides !== undefined ? resolved.guides : curr.guides
+      const sig =
+        'savedSignature' in resolved && typeof resolved.savedSignature === 'string'
+          ? resolved.savedSignature
+          : curr.savedSignature
+      const dirty = computeDesignSignature(nextPanels, nextGuides) !== sig
+      const enriched = { ...resolved, hasUnsavedChanges: dirty }
+      if (replace) {
+        rawSet(enriched as DesignState, true)
+      } else {
+        rawSet(enriched)
+      }
+      return
+    }
+
+    if (replace) {
+      rawSet(resolved as DesignState, true)
+    } else {
+      rawSet(resolved)
+    }
+  }
+
+  return {
   panels: initial.panels,
   guides: initial.guides,
   guidesVisible: true,
@@ -389,8 +449,10 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
   currentDesignId: initial.designId,
   currentDesignName: initial.designName,
-  savedDesigns: loadSavedDesigns(),
+  savedDesigns: initialSavedDesigns,
   lastSavedAt: null,
+  savedSignature: initialSavedSignature,
+  hasUnsavedChanges: initialHasUnsavedChanges,
 
   selectPanel: (id, additive = false) => {
     const { focusMode, partsSidebarOpen } = get()
@@ -1364,6 +1426,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
   newEmptyDesign: () => {
     const { panels, guides, past } = get()
+    const nextSignature = computeDesignSignature([], [])
     saveAutosave([], [], 'تصميم جديد', null)
     set({
       panels: [],
@@ -1374,6 +1437,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       activeReferenceEdge: null,
       currentDesignId: null,
       currentDesignName: 'تصميم جديد',
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
       past: panels.length > 0 || guides.length > 0 ? pushPast(past, panels, guides) : past,
       future: [],
     })
@@ -1382,6 +1447,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   resetToStarterTemplate: () => {
     const { panels, guides, past } = get()
     const starter = createStarterPanels()
+    const nextSignature = computeDesignSignature(starter, [])
     saveAutosave(starter, [], 'وحدة كونتر أساسية', null)
     set({
       panels: starter,
@@ -1392,6 +1458,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       activeReferenceEdge: null,
       currentDesignId: null,
       currentDesignName: 'وحدة كونتر أساسية',
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
       past: pushPast(past, panels, guides),
       future: [],
     })
@@ -1399,19 +1467,63 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
   saveCurrentDesign: (name, asNew = false) => {
     const { panels, guides, currentDesignId } = get()
+    const thumbnail = captureSceneThumbnail()
     const { design, allDesigns } = saveDesignByName(
       name,
       panels,
       guides,
-      asNew ? null : currentDesignId
+      asNew ? null : currentDesignId,
+      thumbnail,
+      asNew
     )
+    const nextSignature = computeDesignSignature(panels, guides)
     saveAutosave(panels, guides, design.name, design.id)
     set({
       savedDesigns: allDesigns,
       currentDesignId: design.id,
       currentDesignName: design.name,
       lastSavedAt: design.updatedAt,
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
+      statusToast: asNew ? `تم حفظ نسخة جديدة: ${design.name}` : `تم حفظ التعديلات: ${design.name}`,
     })
+    return design
+  },
+
+  importDesignProject: (data) => {
+    const { panels, guides, past } = get()
+    const cleanPanels = sanitizePanels(deepClone(data.panels))
+    const cleanGuides = sanitizeGuides(deepClone(data.guides))
+    const thumbnail = captureSceneThumbnail()
+    const { design, allDesigns } = saveDesignByName(
+      data.name,
+      cleanPanels,
+      cleanGuides,
+      null,
+      thumbnail,
+      true
+    )
+    const nextSignature = computeDesignSignature(cleanPanels, cleanGuides)
+    saveAutosave(cleanPanels, cleanGuides, design.name, design.id)
+
+    set({
+      panels: cleanPanels,
+      guides: cleanGuides,
+      savedDesigns: allDesigns,
+      selectedPanelId: null,
+      selectedPanelIds: [],
+      selectedGuideId: null,
+      activeReferenceEdge: null,
+      currentDesignId: design.id,
+      currentDesignName: design.name,
+      lastSavedAt: design.updatedAt,
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast: `تم استيراد وفتح المشروع: ${design.name}`,
+    })
+
     return design
   },
 
@@ -1422,6 +1534,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
     const loadedPanels = sanitizePanels(deepClone(found.panels))
     const loadedGuides = sanitizeGuides(deepClone(found.guides ?? []))
+    const nextSignature = computeDesignSignature(loadedPanels, loadedGuides)
     saveAutosave(loadedPanels, loadedGuides, found.name, found.id)
 
     set({
@@ -1433,8 +1546,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       activeReferenceEdge: null,
       currentDesignId: found.id,
       currentDesignName: found.name,
+      savedSignature: nextSignature,
+      hasUnsavedChanges: false,
       past: pushPast(past, panels, guides),
       future: [],
+      statusToast: `تم فتح المشروع: ${found.name}`,
     })
   },
 
@@ -1443,6 +1559,8 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     set((state) => ({
       savedDesigns: nextList,
       currentDesignId: state.currentDesignId === id ? null : state.currentDesignId,
+      hasUnsavedChanges: state.currentDesignId === id ? true : state.hasUnsavedChanges,
     }))
   },
-}))
+  }
+})

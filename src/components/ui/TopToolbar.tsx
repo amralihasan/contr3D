@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   FileSpreadsheet,
+  FolderOpen,
   ImageDown,
   Images,
   Layers,
@@ -18,7 +19,6 @@ import {
   Minimize2,
   Redo2,
   Ruler,
-  Save,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -83,6 +83,7 @@ export function TopToolbar({
   const isExporting = useDesignStore((s) => s.isExporting)
 
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
+  const hasUnsavedChanges = useDesignStore((s) => s.hasUnsavedChanges)
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
 
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
@@ -117,14 +118,29 @@ export function TopToolbar({
           <Layers className="h-4 w-4" />
         </button>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenDesignsModal}
+          className="flex min-w-0 items-center gap-2 rounded-xl px-1.5 py-1 text-right transition hover:bg-slate-800/70"
+          title={
+            hasUnsavedChanges
+              ? `${currentDesignName} (توجد تعديلات غير محفوظة — اضغط لفتح المشاريع)`
+              : `${currentDesignName} — اضغط لإدارة المشاريع`
+          }
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">
             <Box className="h-4 w-4" />
           </div>
-          <span className="hidden max-w-[140px] truncate text-xs font-bold text-slate-100 sm:inline lg:max-w-[170px]">
+          <span className="hidden max-w-[130px] truncate text-xs font-bold text-slate-100 sm:inline lg:max-w-[175px]">
             {currentDesignName}
           </span>
-        </div>
+          {hasUnsavedChanges && (
+            <span
+              className="hidden h-2 w-2 shrink-0 rounded-full bg-amber-400 ring-2 ring-amber-400/25 sm:inline-block"
+              title="توجد تعديلات غير محفوظة"
+            />
+          )}
+        </button>
 
         <div className="mx-1 hidden h-5 w-px bg-slate-800 sm:block" />
 
@@ -302,11 +318,21 @@ export function TopToolbar({
         <button
           type="button"
           onClick={onOpenDesignsModal}
-          className="flex h-9 items-center gap-1.5 rounded-xl bg-amber-500 px-2.5 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98]"
-          title="حفظ واسترجاع التصاميم"
+          className="relative flex h-9 items-center gap-1.5 rounded-xl bg-amber-500 px-2.5 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98]"
+          title={
+            hasUnsavedChanges
+              ? 'مشاريعي / حفظ التعديلات غير المحفوظة'
+              : 'مشاريعي وحفظ التصاميم'
+          }
         >
-          <Save className="h-4 w-4" />
-          <span className="hidden lg:inline">حفظ</span>
+          <FolderOpen className="h-4 w-4" />
+          <span className="hidden sm:inline">مشاريعي / حفظ</span>
+          {hasUnsavedChanges && (
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-rose-600 ring-2 ring-amber-200"
+              title="تعديلات غير محفوظة"
+            />
+          )}
         </button>
 
         <button

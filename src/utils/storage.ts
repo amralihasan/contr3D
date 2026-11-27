@@ -277,6 +277,10 @@ export function loadSavedDesigns(): SavedDesign[] {
             : 0,
         panels: sanitizePanels(obj.panels),
         guides: sanitizeGuides(obj.guides),
+        thumbnail:
+          typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+            ? obj.thumbnail
+            : undefined,
       })
     }
     return valid.sort((a, b) => b.updatedAt - a.updatedAt)
@@ -286,22 +290,42 @@ export function loadSavedDesigns(): SavedDesign[] {
 }
 
 export function persistSavedDesigns(designs: SavedDesign[]): void {
-  safeSetLocalItem(DESIGNS_STORAGE_KEY, JSON.stringify(designs))
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(DESIGNS_STORAGE_KEY, JSON.stringify(designs))
+  } catch {
+    // في حال امتلاء المساحة بسبب الصور المصغرة، نُزيل الصور الأقدم أولاً للحفاظ على بيانات المشروع
+    try {
+      const stripped = designs.map((d, idx) => (idx === 0 ? d : { ...d, thumbnail: undefined }))
+      window.localStorage.setItem(DESIGNS_STORAGE_KEY, JSON.stringify(stripped))
+    } catch {
+      try {
+        const noThumbs = designs.map((d) => ({ ...d, thumbnail: undefined }))
+        window.localStorage.setItem(DESIGNS_STORAGE_KEY, JSON.stringify(noThumbs))
+      } catch {
+        // تجاهل إذا كان التخزين محظوراً
+      }
+    }
+  }
 }
 
 export function saveDesignByName(
   name: string,
   panels: FurniturePanel[],
   guides: GuideLine[],
-  existingId?: string | null
+  existingId?: string | null,
+  thumbnail?: string,
+  asNew = false
 ): { design: SavedDesign; allDesigns: SavedDesign[] } {
   const trimmed = name.trim() || 'تصميم بدون اسم'
   const existingList = loadSavedDesigns()
   const now = Date.now()
 
-  const matchById = existingId
-    ? existingList.find((d) => d.id === existingId)
-    : existingList.find((d) => d.name === trimmed)
+  const matchById = asNew
+    ? undefined
+    : existingId
+      ? existingList.find((d) => d.id === existingId)
+      : existingList.find((d) => d.name === trimmed)
 
   let updatedDesign: SavedDesign
   let nextList: SavedDesign[]
@@ -313,6 +337,7 @@ export function saveDesignByName(
       updatedAt: now,
       panels: deepClone(panels),
       guides: deepClone(guides),
+      thumbnail: thumbnail ?? matchById.thumbnail,
     }
     nextList = existingList.map((d) => (d.id === matchById.id ? updatedDesign : d))
   } else {
@@ -322,6 +347,7 @@ export function saveDesignByName(
       updatedAt: now,
       panels: deepClone(panels),
       guides: deepClone(guides),
+      thumbnail,
     }
     nextList = [updatedDesign, ...existingList]
   }
@@ -329,6 +355,92 @@ export function saveDesignByName(
   nextList.sort((a, b) => b.updatedAt - a.updatedAt)
   persistSavedDesigns(nextList)
   return { design: updatedDesign, allDesigns: nextList }
+}
+
+export interface ProjectFilePayload {
+  format: 'contr3d-project'
+  version: 1
+  name: string
+  exportedAt: number
+  panels: FurniturePanel[]
+  guides: GuideLine[]
+}
+
+export function exportProjectToJsonFile(
+  name: string,
+  panels: FurniturePanel[],
+  guides: GuideLine[]
+): void {
+  const cleanName = name.trim() || 'تصميم-كونتر'
+  const payload: ProjectFilePayload = {
+    format: 'contr3d-project',
+    version: 1,
+    name: cleanName,
+    exportedAt: Date.now(),
+    panels: deepClone(panels),
+    guides: deepClone(guides),
+  }
+
+  const json = JSON.stringify(payload, null, 2)
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+
+  const safeFilename =
+    cleanName.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '-') || 'contr3d-project'
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${safeFilename}.json`
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 200)
+}
+
+export function parseAndValidateProjectJson(rawText: string): {
+  name: string
+  panels: FurniturePanel[]
+  guides: GuideLine[]
+} {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawText)
+  } catch {
+    throw new Error('الملف غير صالح: تعذر قراءة تنسيق JSON.')
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('بنية الملف غير صالحة: يجب أن يحتوي على بيانات مشروع صحيحة.')
+  }
+
+  const obj = parsed as Record<string, unknown>
+  if ('format' in obj && obj.format !== undefined && obj.format !== 'contr3d-project') {
+    throw new Error('هذا الملف ليس ملف مشروع متوافقاً مع مصمم الكونتر 3D.')
+  }
+
+  if (!Array.isArray(obj.panels)) {
+    throw new Error('الملف غير مكتمل: لا يحتوي على قائمة ألواح التصميم.')
+  }
+
+  const cleanPanels = sanitizePanels(obj.panels)
+  if (obj.panels.length > 0 && cleanPanels.length === 0) {
+    throw new Error('بيانات الألواح داخل الملف غير صالحة أو تالفة.')
+  }
+
+  const cleanGuides = sanitizeGuides(obj.guides)
+  const cleanName =
+    typeof obj.name === 'string' && obj.name.trim().length > 0
+      ? obj.name.trim()
+      : 'مشروع مستورد'
+
+  return {
+    name: cleanName,
+    panels: cleanPanels,
+    guides: cleanGuides,
+  }
 }
 
 export function deleteSavedDesign(id: string): SavedDesign[] {

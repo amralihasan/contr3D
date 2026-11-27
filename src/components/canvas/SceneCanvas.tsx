@@ -6,6 +6,7 @@ import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole, type CameraPreset } from '../../types/furniture'
 import { exportSketchWithDimensions } from '../../utils/sketchExport'
+import { registerThumbnailCapturer } from '../../utils/thumbnail'
 import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
@@ -59,6 +60,37 @@ function ExportCaptureController() {
   const { gl, scene, camera, get } = useThree()
   const exportRequestTick = useDesignStore((s) => s.exportRequestTick)
   const finishExportImage = useDesignStore((s) => s.finishExportImage)
+
+  useEffect(() => {
+    registerThumbnailCapturer(() => {
+      gl.render(scene, camera)
+      const src = gl.domElement
+      const targetW = 320
+      const targetH = 200
+      const out = document.createElement('canvas')
+      out.width = targetW
+      out.height = targetH
+      const ctx = out.getContext('2d')
+      if (!ctx) return undefined
+
+      ctx.fillStyle = '#0f172a'
+      ctx.fillRect(0, 0, targetW, targetH)
+
+      const srcW = src.width || 1
+      const srcH = src.height || 1
+      const scale = Math.max(targetW / srcW, targetH / srcH)
+      const drawW = srcW * scale
+      const drawH = srcH * scale
+      const dx = (targetW - drawW) / 2
+      const dy = (targetH - drawH) / 2
+      ctx.drawImage(src, dx, dy, drawW, drawH)
+      return out.toDataURL('image/jpeg', 0.78)
+    })
+
+    return () => {
+      registerThumbnailCapturer(null)
+    }
+  }, [gl, scene, camera])
 
   useEffect(() => {
     if (exportRequestTick === 0) return

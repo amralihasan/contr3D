@@ -149,6 +149,7 @@ export interface SavedDesign {
   updatedAt: number
   panels: FurniturePanel[]
   guides?: GuideLine[]
+  thumbnail?: string
 }
 
 export interface SnapFeedback {
