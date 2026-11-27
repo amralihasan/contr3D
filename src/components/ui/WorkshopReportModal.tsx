@@ -218,6 +218,7 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                             <th className="px-3 py-3 font-bold">الكمية</th>
                             <th className="px-3 py-3 font-bold">شريط الحرف</th>
                             <th className="px-3 py-3 font-bold">الأمتار</th>
+                            <th className="px-3 py-3 font-bold">ملاحظات الورشة</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/80 bg-slate-900/60">
@@ -245,6 +246,9 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                               <td className="px-3 py-2.5 text-slate-300">{row.edgeLabel}</td>
                               <td className="tabular-nums px-3 py-2.5 font-bold text-sky-300">
                                 {row.totalEdgeMeters > 0 ? `${row.totalEdgeMeters} م` : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-[11px] text-amber-200">
+                                {row.workshopNotes || '—'}
                               </td>
                             </tr>
                           ))}
@@ -446,6 +450,7 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                               <th className="border border-slate-300 px-2.5 py-2">الخامة</th>
                               <th className="border border-slate-300 px-2.5 py-2">الكمية</th>
                               <th className="border border-slate-300 px-2.5 py-2">شريط الحرف</th>
+                              <th className="border border-slate-300 px-2.5 py-2">ملاحظات الورشة</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -468,6 +473,9 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                                 </td>
                                 <td className="border border-slate-300 px-2.5 py-1.5">
                                   {row.edgeLabel} ({row.totalEdgeMeters} م)
+                                </td>
+                                <td className="border border-slate-300 px-2.5 py-1.5 text-[11px]">
+                                  {row.workshopNotes || '—'}
                                 </td>
                               </tr>
                             ))}
@@ -544,6 +552,7 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                 <th className="border border-slate-400 px-2 py-1.5">الخامة</th>
                 <th className="border border-slate-400 px-2 py-1.5">الكمية</th>
                 <th className="border border-slate-400 px-2 py-1.5">شريط الحرف</th>
+                <th className="border border-slate-400 px-2 py-1.5">ملاحظات الورشة</th>
               </tr>
             </thead>
             <tbody>
@@ -567,6 +576,9 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                   </td>
                   <td className="border border-slate-400 px-2 py-1.5">
                     {row.edgeLabel} ({row.totalEdgeMeters} م)
+                  </td>
+                  <td className="border border-slate-400 px-2 py-1.5 text-[11px]">
+                    {row.workshopNotes || '—'}
                   </td>
                 </tr>
               ))}

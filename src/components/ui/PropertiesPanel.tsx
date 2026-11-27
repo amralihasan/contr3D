@@ -2,11 +2,13 @@ import {
   AlignHorizontalSpaceAround,
   AlignVerticalSpaceAround,
   ChevronDown,
+  Circle,
   Copy,
   Minus,
   Plus,
   RotateCw,
   SlidersHorizontal,
+  Square,
   Trash2,
   X,
 } from 'lucide-react'
@@ -26,9 +28,11 @@ import {
   isInterfaceRole,
   isLegOrBaseRole,
   type Axis,
+  type CornerRadius,
   type EdgeSide,
   type PanelDimensions,
 } from '../../types/furniture'
+import { getMaxCornerRadius, getPanelFaceSize } from '../../utils/panelGeometry'
 import { roundTo } from '../../utils/snapping'
 
 interface PropertiesPanelProps {
@@ -178,6 +182,10 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const setPanelHasHandle = useDesignStore((s) => s.setPanelHasHandle)
   const setPanelHingeSide = useDesignStore((s) => s.setPanelHingeSide)
   const togglePanelEdgeBanding = useDesignStore((s) => s.togglePanelEdgeBanding)
+  const setPanelCornerRadius = useDesignStore((s) => s.setPanelCornerRadius)
+  const addPanelCutout = useDesignStore((s) => s.addPanelCutout)
+  const updatePanelCutout = useDesignStore((s) => s.updatePanelCutout)
+  const removePanelCutout = useDesignStore((s) => s.removePanelCutout)
   const rotatePanel90 = useDesignStore((s) => s.rotatePanel90)
   const setPanelMaterial = useDesignStore((s) => s.setPanelMaterial)
   const duplicatePanel = useDesignStore((s) => s.duplicatePanel)
@@ -327,6 +335,8 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const isFront = isInterfaceRole(panel.role)
   const isBaseOrLeg = isLegOrBaseRole(panel.role)
   const isHardwareLegs = panel.role === 'wood_legs' || panel.role === 'metal_legs'
+  const supportsShapeAndCutouts =
+    !isBaseOrLeg && panel.role !== 'drawer'
   const clearance = panel.clearanceCm ?? 0.2
   const netW = roundTo(Math.max(1, panel.dimensions.width - clearance * 2), 2)
   const netH = roundTo(Math.max(1, panel.dimensions.height - clearance * 2), 2)
@@ -337,6 +347,13 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
     edgeBanding.right,
     edgeBanding.left,
   ].filter(Boolean).length
+
+  const cr: CornerRadius = panel.cornerRadius ?? { tl: 0, tr: 0, bl: 0, br: 0 }
+  const maxCornerR = getMaxCornerRadius(panel.dimensions, panel.thicknessAxis)
+  const { faceW, faceH } = getPanelFaceSize(panel.dimensions, panel.thicknessAxis)
+  const cutouts = panel.cutouts ?? []
+  const roundedCornersCount = [cr.tl, cr.tr, cr.bl, cr.br].filter((v) => v > 0.01).length
+  const shapeModsCount = (roundedCornersCount > 0 ? 1 : 0) + cutouts.length
 
   const deg = (rad: number) => {
     const normalized = Math.round(((rad * 180) / Math.PI) % 360)
@@ -611,6 +628,262 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
                   </button>
                 )
               })}
+            </div>
+          </AccordionSection>
+        )}
+
+        {/* 5. الدوران والفتحات (مطوي افتراضياً) */}
+        {supportsShapeAndCutouts && (
+          <AccordionSection
+            title="الدوران والفتحات"
+            badge={shapeModsCount > 0 ? `${shapeModsCount} تعديل` : undefined}
+            defaultOpen={false}
+          >
+            <div className="space-y-3">
+              {/* دوران الزوايا */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-slate-300">دوران الزوايا (سم)</span>
+                  <span className="tabular-nums text-slate-500">أقصى R: {maxCornerR} سم</span>
+                </div>
+
+                <div className="mb-2 grid grid-cols-4 gap-1">
+                  {[0, 3, 5, 10].map((r) => {
+                    const allSame =
+                      Math.abs(cr.tl - r) < 0.05 &&
+                      Math.abs(cr.tr - r) < 0.05 &&
+                      Math.abs(cr.bl - r) < 0.05 &&
+                      Math.abs(cr.br - r) < 0.05
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() =>
+                          setPanelCornerRadius(panel.id, { tl: r, tr: r, bl: r, br: r })
+                        }
+                        className={`h-8 rounded-lg border text-[11px] font-bold transition ${
+                          allSame
+                            ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                            : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        {r === 0 ? 'حاد 0' : `${r} سم`}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(
+                    [
+                      { key: 'tr', label: 'أعلى يمين' },
+                      { key: 'tl', label: 'أعلى يسار' },
+                      { key: 'br', label: 'أسفل يمين' },
+                      { key: 'bl', label: 'أسفل يسار' },
+                    ] as const
+                  ).map((corner) => (
+                    <div
+                      key={corner.key}
+                      className="flex items-center justify-between gap-1 rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1"
+                    >
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        {corner.label}
+                      </span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={0}
+                        max={maxCornerR}
+                        value={cr[corner.key]}
+                        onChange={(e) => {
+                          const v = Number.parseFloat(e.target.value)
+                          setPanelCornerRadius(panel.id, {
+                            ...cr,
+                            [corner.key]: Number.isFinite(v) ? v : 0,
+                          })
+                        }}
+                        className="tabular-nums h-7 w-12 rounded border border-slate-700 bg-slate-950 text-center text-xs font-bold text-white outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* فتحات الأسلاك (الفحر) */}
+              <div className="border-t border-slate-800/80 pt-2.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-300">
+                    فتحات الأسلاك ({cutouts.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => addPanelCutout(panel.id)}
+                    className="flex h-8 items-center gap-1 rounded-lg bg-cyan-500/20 px-2.5 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-500/40 transition hover:bg-cyan-500/30"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>إضافة فتحة سلك</span>
+                  </button>
+                </div>
+
+                {cutouts.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-800 p-2.5 text-center text-[11px] text-slate-500">
+                    لا توجد فتحات في هذا اللوح
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {cutouts.map((c, idx) => (
+                      <div
+                        key={c.id}
+                        className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-bold text-cyan-200">
+                            فتحة #{idx + 1}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updatePanelCutout(panel.id, c.id, { shape: 'circle' })
+                              }
+                              className={`flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-bold ${
+                                c.shape === 'circle'
+                                  ? 'bg-cyan-500 text-slate-950'
+                                  : 'bg-slate-800 text-slate-300'
+                              }`}
+                            >
+                              <Circle className="h-3 w-3" />
+                              <span>دائرية</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updatePanelCutout(panel.id, c.id, { shape: 'rect' })
+                              }
+                              className={`flex h-7 items-center gap-1 rounded-md px-2 text-[10px] font-bold ${
+                                c.shape === 'rect'
+                                  ? 'bg-cyan-500 text-slate-950'
+                                  : 'bg-slate-800 text-slate-300'
+                              }`}
+                            >
+                              <Square className="h-3 w-3" />
+                              <span>مستطيلة</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removePanelCutout(panel.id, c.id)}
+                              className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
+                              aria-label="حذف الفتحة"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* مقاس الفتحة */}
+                        {c.shape === 'circle' ? (
+                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1">
+                            <span className="text-[11px] text-slate-300">القطر (سم)</span>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={1}
+                              max={Math.max(2, Math.min(faceW, faceH) - 1)}
+                              value={c.diameter ?? 6}
+                              onChange={(e) => {
+                                const v = Number.parseFloat(e.target.value)
+                                if (Number.isFinite(v)) {
+                                  updatePanelCutout(panel.id, c.id, {
+                                    diameter: Math.max(1, v),
+                                    width: Math.max(1, v),
+                                    height: Math.max(1, v),
+                                  })
+                                }
+                              }}
+                              className="tabular-nums h-7 w-16 rounded border border-slate-700 bg-slate-900 text-center text-xs font-bold text-white outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1">
+                              <span className="text-[10px] text-slate-400">عرض</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min={1}
+                                max={Math.max(2, faceW - 1)}
+                                value={c.width}
+                                onChange={(e) => {
+                                  const v = Number.parseFloat(e.target.value)
+                                  if (Number.isFinite(v)) {
+                                    updatePanelCutout(panel.id, c.id, {
+                                      width: Math.max(1, v),
+                                    })
+                                  }
+                                }}
+                                className="tabular-nums h-7 w-12 rounded border border-slate-700 bg-slate-900 text-center text-xs font-bold text-white outline-none focus:border-cyan-400"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1">
+                              <span className="text-[10px] text-slate-400">طول</span>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min={1}
+                                max={Math.max(2, faceH - 1)}
+                                value={c.height}
+                                onChange={(e) => {
+                                  const v = Number.parseFloat(e.target.value)
+                                  if (Number.isFinite(v)) {
+                                    updatePanelCutout(panel.id, c.id, {
+                                      height: Math.max(1, v),
+                                    })
+                                  }
+                                }}
+                                className="tabular-nums h-7 w-12 rounded border border-slate-700 bg-slate-900 text-center text-xs font-bold text-white outline-none focus:border-cyan-400"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* موقع الفتحة بالنسبة لمركز اللوح */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1">
+                            <span className="text-[10px] text-slate-400">يمين/يسار X</span>
+                            <input
+                              type="number"
+                              step="1"
+                              value={c.x}
+                              onChange={(e) => {
+                                const v = Number.parseFloat(e.target.value)
+                                if (Number.isFinite(v)) {
+                                  updatePanelCutout(panel.id, c.id, { x: v })
+                                }
+                              }}
+                              className="tabular-nums h-7 w-12 rounded border border-slate-700 bg-slate-900 text-center text-xs font-bold text-white outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1">
+                            <span className="text-[10px] text-slate-400">أعلى/أسفل Y</span>
+                            <input
+                              type="number"
+                              step="1"
+                              value={c.y}
+                              onChange={(e) => {
+                                const v = Number.parseFloat(e.target.value)
+                                if (Number.isFinite(v)) {
+                                  updatePanelCutout(panel.id, c.id, { y: v })
+                                }
+                              }}
+                              className="tabular-nums h-7 w-12 rounded border border-slate-700 bg-slate-900 text-center text-xs font-bold text-white outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </AccordionSection>
         )}

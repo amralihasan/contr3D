@@ -51,6 +51,23 @@ export interface PanelDimensions {
   depth: number
 }
 
+export interface CornerRadius {
+  tl: number
+  tr: number
+  bl: number
+  br: number
+}
+
+export interface PanelCutout {
+  id: string
+  shape: 'circle' | 'rect'
+  x: number
+  y: number
+  width: number
+  height: number
+  diameter?: number
+}
+
 export interface FurniturePanel {
   id: string
   name: string
@@ -67,6 +84,10 @@ export interface FurniturePanel {
   materialId: MaterialId
   /** شريط الحرف الظاهر لكل لوح */
   edgeBanding?: EdgeBanding
+  /** دوران زوايا اللوح بالسنتيمتر */
+  cornerRadius?: CornerRadius
+  /** فتحات الأسلاك / الفحر داخل اللوح */
+  cutouts?: PanelCutout[]
   /** الخلوص (Clearance) للضلف والأدراج بالسنتيمتر، الافتراضي 0.2 سم (2 مم) */
   clearanceCm?: number
   /** عرض مقبض بسيط للضلفة أو الدرج */

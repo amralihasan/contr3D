@@ -12,6 +12,7 @@ import {
   getEffectiveEdgeBanding,
   type Axis,
   type CameraPreset,
+  type CornerRadius,
   type EdgeBanding,
   type EdgeSide,
   type FurniturePanel,
@@ -19,6 +20,7 @@ import {
   type HingeSide,
   type HumanScalePreset,
   type MaterialId,
+  type PanelCutout,
   type PanelDimensions,
   type PanelRole,
   type SavedDesign,
@@ -28,6 +30,7 @@ import {
   type Vec3,
 } from '../types/furniture'
 import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
+import { clampCornerRadius } from '../utils/panelGeometry'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
 import {
   deleteSavedDesign,
@@ -279,6 +282,10 @@ interface DesignState {
   setPanelHingeSide: (id: string, side: HingeSide) => void
   togglePanelEdgeBanding: (id: string, side: EdgeSide) => void
   setPanelEdgeBanding: (id: string, edgeBanding: EdgeBanding) => void
+  setPanelCornerRadius: (id: string, cornerRadius: CornerRadius) => void
+  addPanelCutout: (id: string) => void
+  updatePanelCutout: (id: string, cutoutId: string, patch: Partial<PanelCutout>) => void
+  removePanelCutout: (id: string, cutoutId: string) => void
   rotatePanel90: (id: string, axis: Axis) => void
   setPanelMaterial: (id: string, materialId: MaterialId) => void
   renamePanel: (id: string, name: string) => void
@@ -1074,6 +1081,91 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
     const nextPanels = panels.map((p) =>
       p.id === id ? { ...p, edgeBanding } : p
+    )
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  setPanelCornerRadius: (id, cornerRadius) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const clamped = clampCornerRadius(cornerRadius, target.dimensions, target.thicknessAxis)
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, cornerRadius: clamped } : p
+    )
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  addPanelCutout: (id) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const newCutout: PanelCutout = {
+      id: createId('cutout'),
+      shape: 'circle',
+      x: 0,
+      y: 0,
+      width: 6,
+      height: 6,
+      diameter: 6,
+    }
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, cutouts: [...(p.cutouts ?? []), newCutout] } : p
+    )
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  updatePanelCutout: (id, cutoutId, patch) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) => {
+      if (p.id !== id) return p
+      const nextCutouts = (p.cutouts ?? []).map((c) =>
+        c.id === cutoutId ? { ...c, ...patch } : c
+      )
+      return { ...p, cutouts: nextCutouts }
+    })
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  removePanelCutout: (id, cutoutId) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id
+        ? { ...p, cutouts: (p.cutouts ?? []).filter((c) => c.id !== cutoutId) }
+        : p
     )
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 

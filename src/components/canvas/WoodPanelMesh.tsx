@@ -5,6 +5,10 @@ import * as THREE from 'three'
 import { MATERIALS } from '../../constants/materials'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { FurniturePanel } from '../../types/furniture'
+import {
+  buildExtrudedPanelGeometry,
+  hasCustomPanelGeometry,
+} from '../../utils/panelGeometry'
 import { getWoodTexture } from '../../utils/woodTextures'
 import type { TapePanelHandlers } from './TapeMeasureTool'
 
@@ -57,6 +61,47 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       texture?.dispose()
     }
   }, [texture])
+
+  const useCustomExtrude =
+    hasCustomPanelGeometry(panel) &&
+    panel.role !== 'drawer' &&
+    panel.role !== 'plinth_base' &&
+    panel.role !== 'wood_legs' &&
+    panel.role !== 'metal_legs'
+
+  const customGeometry = useMemo(() => {
+    if (!useCustomExtrude) return null
+    const clearance = panel.clearanceCm ?? 0.2
+    const isDoor = panel.role === 'hinged_door' || panel.role === 'sliding_door'
+    const geomDims = isDoor
+      ? {
+          width: Math.max(2, panel.dimensions.width - clearance * 2),
+          height: Math.max(2, panel.dimensions.height - clearance * 2),
+          depth: panel.dimensions.depth,
+        }
+      : panel.dimensions
+
+    return buildExtrudedPanelGeometry(
+      geomDims,
+      panel.thicknessAxis,
+      panel.cornerRadius,
+      panel.cutouts
+    )
+  }, [
+    useCustomExtrude,
+    panel.role,
+    panel.clearanceCm,
+    panel.dimensions,
+    panel.thicknessAxis,
+    panel.cornerRadius,
+    panel.cutouts,
+  ])
+
+  useEffect(() => {
+    return () => {
+      customGeometry?.dispose()
+    }
+  }, [customGeometry])
 
   useEffect(() => {
     registerObject(panel.id, groupRef.current)
@@ -178,8 +223,13 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       return (
         <group position={[hingeX, 0, 0]} ref={animRef}>
           <group position={[-hingeX, 0, 0]}>
-            <mesh castShadow receiveShadow onClick={handleClick}>
-              <boxGeometry args={[effW, effH, effD]} />
+            <mesh
+              geometry={customGeometry ?? undefined}
+              castShadow
+              receiveShadow
+              onClick={handleClick}
+            >
+              {!customGeometry && <boxGeometry args={[effW, effH, effD]} />}
               <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
               <Edges
                 scale={isSelected ? 1.003 : 1.001}
@@ -214,8 +264,13 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
 
       return (
         <group ref={animRef}>
-          <mesh castShadow receiveShadow onClick={handleClick}>
-            <boxGeometry args={[effW, effH, effD]} />
+          <mesh
+            geometry={customGeometry ?? undefined}
+            castShadow
+            receiveShadow
+            onClick={handleClick}
+          >
+            {!customGeometry && <boxGeometry args={[effW, effH, effD]} />}
             <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
             <Edges
               scale={isSelected ? 1.003 : 1.001}
@@ -497,10 +552,15 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       )
     }
 
-    // 7. لوح كونتر عادي (قرصة، جنب، رف، قاطع، ضهر)
+    // 7. لوح كونتر عادي (أو بأطراف مدورة / فتحات أسلاك عبر ExtrudeGeometry)
     return (
-      <mesh castShadow receiveShadow onClick={handleClick}>
-        <boxGeometry args={[width, height, depth]} />
+      <mesh
+        geometry={customGeometry ?? undefined}
+        castShadow
+        receiveShadow
+        onClick={handleClick}
+      >
+        {!customGeometry && <boxGeometry args={[width, height, depth]} />}
         <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
         <Edges
           scale={isSelected ? 1.003 : 1.001}

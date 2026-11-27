@@ -20,6 +20,7 @@ export interface CutPieceItem {
   edgeBanding: EdgeBanding
   edgeMetersPerPiece: number
   edgeLabel: string
+  workshopNotes: string
 }
 
 export interface GroupedCutRow {
@@ -36,6 +37,7 @@ export interface GroupedCutRow {
   edgeBanding: EdgeBanding
   edgeLabel: string
   totalEdgeMeters: number
+  workshopNotes: string
 }
 
 export interface EdgeBandingMaterialTotal {
@@ -89,6 +91,40 @@ function formatEdgeSummary(eb: EdgeBanding): string {
 
 function edgeSignature(eb: EdgeBanding): string {
   return `${eb.top ? 1 : 0}${eb.bottom ? 1 : 0}${eb.right ? 1 : 0}${eb.left ? 1 : 0}`
+}
+
+function buildPanelWorkshopNotes(panel: FurniturePanel): string {
+  const notes: string[] = []
+  const cr = panel.cornerRadius
+  if (cr && (cr.tl > 0.01 || cr.tr > 0.01 || cr.bl > 0.01 || cr.br > 0.01)) {
+    const allEqual =
+      Math.abs(cr.tl - cr.tr) < 0.01 &&
+      Math.abs(cr.tl - cr.bl) < 0.01 &&
+      Math.abs(cr.tl - cr.br) < 0.01
+    if (allEqual) {
+      notes.push(`دوران 4 زوايا R=${cr.tl} سم`)
+    } else {
+      const corners: string[] = []
+      if (cr.tr > 0.01) corners.push(`أعلى يمين ${cr.tr}`)
+      if (cr.tl > 0.01) corners.push(`أعلى يسار ${cr.tl}`)
+      if (cr.br > 0.01) corners.push(`أسفل يمين ${cr.br}`)
+      if (cr.bl > 0.01) corners.push(`أسفل يسار ${cr.bl}`)
+      notes.push(`دوران زوايا (${corners.join('، ')}) سم`)
+    }
+  }
+
+  if (panel.cutouts && panel.cutouts.length > 0) {
+    for (const c of panel.cutouts) {
+      if (c.shape === 'circle') {
+        const d = c.diameter ?? c.width
+        notes.push(`فتحة سلك دائرية Ø${d} سم (${c.x},${c.y})`)
+      } else {
+        notes.push(`فتحة سلك مستطيلة ${c.width}×${c.height} سم (${c.x},${c.y})`)
+      }
+    }
+  }
+
+  return notes.join(' | ')
 }
 
 function calcEdgeMeters(
@@ -170,6 +206,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: eb,
         edgeMetersPerPiece: calcEdgeMeters(netW, netH, eb),
         edgeLabel: formatEdgeSummary(eb),
+        workshopNotes: buildPanelWorkshopNotes(panel),
       })
       continue
     }
@@ -194,6 +231,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: eb,
         edgeMetersPerPiece: calcEdgeMeters(effW, effH, eb),
         edgeLabel: formatEdgeSummary(eb),
+        workshopNotes: '',
       })
 
       // أجزاء صندوق الدرج الداخلي (جنبين + ضهر 18 مم، وقاع 6 مم)
@@ -216,6 +254,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
           edgeBanding: sideEb,
           edgeMetersPerPiece: calcEdgeMeters(boxD, boxH, sideEb),
           edgeLabel: formatEdgeSummary(sideEb),
+          workshopNotes: '',
         })
       }
 
@@ -232,6 +271,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: sideEb,
         edgeMetersPerPiece: calcEdgeMeters(backW, boxH, sideEb),
         edgeLabel: formatEdgeSummary(sideEb),
+        workshopNotes: '',
       })
 
       const bottomEb: EdgeBanding = { top: false, bottom: false, right: false, left: false }
@@ -247,6 +287,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: bottomEb,
         edgeMetersPerPiece: 0,
         edgeLabel: 'بدون شريط',
+        workshopNotes: '',
       })
       continue
     }
@@ -272,6 +313,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
           edgeBanding: eb,
           edgeMetersPerPiece: calcEdgeMeters(w, h, eb),
           edgeLabel: formatEdgeSummary(eb),
+          workshopNotes: '',
         })
       }
 
@@ -289,6 +331,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
           edgeBanding: eb,
           edgeMetersPerPiece: calcEdgeMeters(sideLen, h, eb),
           edgeLabel: formatEdgeSummary(eb),
+          workshopNotes: '',
         })
       }
       continue
@@ -311,6 +354,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
       edgeBanding: eb,
       edgeMetersPerPiece: calcEdgeMeters(primaryDimCm, secondaryDimCm, eb),
       edgeLabel: formatEdgeSummary(eb),
+      workshopNotes: buildPanelWorkshopNotes(panel),
     })
   }
 
@@ -325,6 +369,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
       piece.thicknessCm.toFixed(2),
       piece.materialId,
       edgeSignature(piece.edgeBanding),
+      piece.workshopNotes,
     ].join('|')
 
     const existing = rowMap.get(key)
@@ -349,6 +394,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
         edgeBanding: piece.edgeBanding,
         edgeLabel: piece.edgeLabel,
         totalEdgeMeters: roundTo(piece.edgeMetersPerPiece, 2),
+        workshopNotes: piece.workshopNotes,
       })
     }
 
