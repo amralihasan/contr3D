@@ -1,8 +1,9 @@
 import { Canvas, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
-import { isInterfaceRole } from '../../types/furniture'
+import { isInterfaceRole, type CameraPreset } from '../../types/furniture'
 import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
@@ -12,13 +13,14 @@ import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
 
-function buildExportFilename(designName: string): string {
+function buildExportFilename(designName: string, suffix?: string): string {
   const cleaned = designName
     .trim()
     .replace(/[/\\?%*:|"<>]/g, '-')
     .replace(/\s+/g, '-')
   const dateStr = new Date().toISOString().slice(0, 10)
-  return `${cleaned || 'contr3d-design'}-${dateStr}.png`
+  const base = `${cleaned || 'contr3d-design'}-${dateStr}`
+  return suffix ? `${base}-${suffix}.png` : `${base}.png`
 }
 
 function triggerPngDownload(dataUrl: string, filename: string) {
@@ -33,20 +35,26 @@ function triggerPngDownload(dataUrl: string, filename: string) {
   }, 150)
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function ExportCaptureController() {
-  const { gl, scene, camera } = useThree()
+  const { gl, scene, camera, get } = useThree()
   const exportRequestTick = useDesignStore((s) => s.exportRequestTick)
   const finishExportImage = useDesignStore((s) => s.finishExportImage)
 
   useEffect(() => {
     if (exportRequestTick === 0) return
 
+    let cancelled = false
     let raf1 = 0
     let raf2 = 0
 
     // انتظار إطارين لضمان إخفاء الشبكة وأسهم التحريك وإطار التحديد وتحديث الخلفية في Three.js
     raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(async () => {
+        if (cancelled) return
         const state = useDesignStore.getState()
         const mode = state.exportMode
         if (!mode) {
@@ -55,6 +63,54 @@ function ExportCaptureController() {
         }
 
         try {
+          if (mode === 'three_angles') {
+            const controls = get().controls as {
+              target?: THREE.Vector3
+              update?: () => void
+            } | null
+
+            const prevPos = camera.position.clone()
+            const prevTarget = controls?.target ? controls.target.clone() : new THREE.Vector3(0, 40, 0)
+
+            const angles: { preset: CameraPreset; suffix: string }[] = [
+              { preset: 'front', suffix: 'امامي' },
+              { preset: 'side', suffix: 'جانبي' },
+              { preset: 'perspective', suffix: '3D' },
+            ]
+
+            for (const angle of angles) {
+              if (cancelled) break
+              const cfg = CAMERA_PRESETS[angle.preset]
+              camera.position.set(...cfg.position)
+              if (controls?.target) {
+                controls.target.set(...cfg.target)
+                controls.update?.()
+              } else {
+                camera.lookAt(...cfg.target)
+              }
+              camera.updateMatrixWorld()
+              gl.render(scene, camera)
+              const shotUrl = gl.domElement.toDataURL('image/png', 1.0)
+              triggerPngDownload(
+                shotUrl,
+                buildExportFilename(state.currentDesignName, angle.suffix)
+              )
+              await sleep(180)
+            }
+
+            camera.position.copy(prevPos)
+            if (controls?.target) {
+              controls.target.copy(prevTarget)
+              controls.update?.()
+            }
+            camera.updateMatrixWorld()
+
+            if (!cancelled) {
+              finishExportImage(true, 'تم تصدير 3 زوايا للتصميم بنجاح')
+            }
+            return
+          }
+
           const prevBg = scene.background
           const prevFog = scene.fog
           const prevClearColor = gl.getClearColor(new THREE.Color())
@@ -77,18 +133,23 @@ function ExportCaptureController() {
           }
 
           triggerPngDownload(dataUrl, buildExportFilename(state.currentDesignName))
-          finishExportImage(true)
+          if (!cancelled) {
+            finishExportImage(true)
+          }
         } catch {
-          finishExportImage(false)
+          if (!cancelled) {
+            finishExportImage(false)
+          }
         }
       })
     })
 
     return () => {
+      cancelled = true
       cancelAnimationFrame(raf1)
       cancelAnimationFrame(raf2)
     }
-  }, [exportRequestTick, gl, scene, camera, finishExportImage])
+  }, [exportRequestTick, gl, scene, camera, get, finishExportImage])
 
   return null
 }

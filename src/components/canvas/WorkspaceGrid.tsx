@@ -3,7 +3,7 @@ import { useDesignStore } from '../../store/useDesignStore'
 
 export function WorkspaceGrid() {
   const exportMode = useDesignStore((s) => s.exportMode)
-  const isCleanExport = exportMode === 'clean'
+  const isCleanExport = exportMode === 'clean' || exportMode === 'three_angles'
   const isTransparentExport = exportMode === 'transparent'
 
   return (

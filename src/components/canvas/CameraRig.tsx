@@ -3,18 +3,8 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import { CAMERA_PRESETS } from '../../constants/presets'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { CameraPreset } from '../../types/furniture'
-
-const CAMERA_PRESETS: Record<
-  CameraPreset,
-  { position: [number, number, number]; target: [number, number, number] }
-> = {
-  perspective: { position: [145, 115, 175], target: [0, 40, 0] },
-  front: { position: [0, 45, 225], target: [0, 45, 0] },
-  side: { position: [225, 45, 0], target: [0, 45, 0] },
-  top: { position: [0, 245, 0.1], target: [0, 0, 0] },
-}
 
 export function CameraRig() {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)

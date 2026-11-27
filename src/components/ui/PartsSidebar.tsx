@@ -97,7 +97,7 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
           <button
             type="button"
             onClick={onCloseMobile}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 md:hidden"
             aria-label="إغلاق"
           >
             <X className="h-5 w-5" />

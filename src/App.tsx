@@ -1,4 +1,9 @@
-import { AlignVerticalSpaceAround, SlidersHorizontal } from 'lucide-react'
+import {
+  AlignVerticalSpaceAround,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { SceneCanvas } from './components/canvas/SceneCanvas'
 import { ViewportOverlay } from './components/canvas/ViewportOverlay'
@@ -14,9 +19,15 @@ import { useDesignStore } from './store/useDesignStore'
 export function App() {
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
-  const [partsDrawerOpen, setPartsDrawerOpen] = useState(false)
-  const [propsDrawerOpen, setPropsDrawerOpen] = useState(false)
+  const [mobilePartsOpen, setMobilePartsOpen] = useState(false)
+  const [mobilePropsOpen, setMobilePropsOpen] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
+
+  const partsSidebarOpen = useDesignStore((s) => s.partsSidebarOpen)
+  const propsSidebarOpen = useDesignStore((s) => s.propsSidebarOpen)
+  const togglePartsSidebar = useDesignStore((s) => s.togglePartsSidebar)
+  const togglePropsSidebar = useDesignStore((s) => s.togglePropsSidebar)
+  const toggleFocusMode = useDesignStore((s) => s.toggleFocusMode)
 
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
@@ -41,7 +52,7 @@ export function App() {
 
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
 
-  // اختصارات لوحة المفاتيح للكمبيوتر (تدعم لوحة المفاتيح العربية والإنجليزية عبر e.code)
+  // اختصارات لوحة المفاتيح (بما فيها Tab لوضع التركيز)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -49,9 +60,16 @@ export function App() {
         target &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
           target.isContentEditable)
 
       if (isInput) return
+
+      if (e.key === 'Tab' && !designsModalOpen && !workshopReportOpen) {
+        e.preventDefault()
+        toggleFocusMode()
+        return
+      }
 
       const mod = e.ctrlKey || e.metaKey
       const code = e.code
@@ -152,6 +170,7 @@ export function App() {
     selectPanel,
     setToolMode,
     setActiveReferenceEdge,
+    toggleFocusMode,
     selectedPanelIds,
     selectedGuideId,
     toolMode,
@@ -162,7 +181,7 @@ export function App() {
   ])
 
   const hideBottomFloatingActions =
-    propsDrawerOpen || Boolean(selectedGuideId) || Boolean(activeReferenceEdge)
+    mobilePropsOpen || Boolean(selectedGuideId) || Boolean(activeReferenceEdge)
 
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100 print:hidden">
@@ -170,21 +189,27 @@ export function App() {
         onOpenDesignsModal={() => setDesignsModalOpen(true)}
         onOpenWorkshopReport={() => setWorkshopReportOpen(true)}
         onTogglePartsDrawer={() => {
-          setPartsDrawerOpen((v) => !v)
-          setPropsDrawerOpen(false)
+          setMobilePartsOpen((v) => !v)
+          setMobilePropsOpen(false)
         }}
         onTogglePropsDrawer={() => {
-          setPropsDrawerOpen((v) => !v)
-          setPartsDrawerOpen(false)
+          setMobilePropsOpen((v) => !v)
+          setMobilePartsOpen(false)
         }}
-        isPartsOpen={partsDrawerOpen}
-        isPropsOpen={propsDrawerOpen}
+        isPartsOpen={mobilePartsOpen}
+        isPropsOpen={mobilePropsOpen}
       />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* القائمة اليمنى: مكتبة الأجزاء (ثابتة على الشاشات الكبيرة) */}
-        <div className="hidden h-full w-72 shrink-0 lg:block xl:w-80">
-          <PartsSidebar />
+        {/* القائمة اليمنى: مكتبة الأجزاء (قابلة للطي بسلاسة على الكمبيوتر والتابلت) */}
+        <div
+          className={`hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block ${
+            partsSidebarOpen ? 'w-68 lg:w-72' : 'w-0'
+          }`}
+        >
+          <div className="h-full w-68 lg:w-72">
+            <PartsSidebar />
+          </div>
         </div>
 
         {/* مساحة العمل 3D */}
@@ -203,11 +228,41 @@ export function App() {
           <ViewportOverlay />
           <TapeMeasureHud />
 
-          {/* الشريط العائم للإجراءات السريعة + أزرار التابلت السريعة بدون أي تعارض */}
+          {/* زر طي/فتح القائمة اليمنى (Chevron Toggle Tab) */}
+          <button
+            type="button"
+            onClick={togglePartsSidebar}
+            className="hidden md:flex absolute right-0 top-1/2 z-20 h-14 w-6 -translate-y-1/2 items-center justify-center rounded-l-xl border border-r-0 border-slate-700/80 bg-slate-900/90 text-slate-300 shadow-lg backdrop-blur-md transition hover:bg-slate-800 hover:text-amber-300"
+            title={partsSidebarOpen ? 'طي مكتبة الأجزاء' : 'إظهار مكتبة الأجزاء'}
+            aria-label={partsSidebarOpen ? 'طي مكتبة الأجزاء' : 'إظهار مكتبة الأجزاء'}
+          >
+            {partsSidebarOpen ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+
+          {/* زر طي/فتح القائمة اليسرى (Chevron Toggle Tab) */}
+          <button
+            type="button"
+            onClick={togglePropsSidebar}
+            className="hidden md:flex absolute left-0 top-1/2 z-20 h-14 w-6 -translate-y-1/2 items-center justify-center rounded-r-xl border border-l-0 border-slate-700/80 bg-slate-900/90 text-slate-300 shadow-lg backdrop-blur-md transition hover:bg-slate-800 hover:text-amber-300"
+            title={propsSidebarOpen ? 'طي لوحة الخصائص' : 'إظهار لوحة الخصائص'}
+            aria-label={propsSidebarOpen ? 'طي لوحة الخصائص' : 'إظهار لوحة الخصائص'}
+          >
+            {propsSidebarOpen ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+
+          {/* الشريط العائم للإجراءات السريعة + أزرار الموبايل */}
           {!hideBottomFloatingActions && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex flex-col items-center gap-2 px-3">
               {selectedPanelIds.length >= 2 && (
-                <div className="flex justify-center gap-2 lg:hidden">
+                <div className="flex justify-center gap-2 md:hidden">
                   <button
                     type="button"
                     onClick={() => autoDistributeSelected()}
@@ -218,7 +273,7 @@ export function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPropsDrawerOpen(true)}
+                    onClick={() => setMobilePropsOpen(true)}
                     className="pointer-events-auto flex h-11 items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/95 px-4 text-xs font-bold text-slate-100 shadow-xl backdrop-blur-md transition active:scale-95"
                   >
                     <SlidersHorizontal className="h-4 w-4 text-amber-400" />
@@ -228,10 +283,10 @@ export function App() {
               )}
 
               {selectedPanelIds.length === 1 && selectedPanel && (
-                <div className="flex justify-center lg:hidden">
+                <div className="flex justify-center md:hidden">
                   <button
                     type="button"
-                    onClick={() => setPropsDrawerOpen(true)}
+                    onClick={() => setMobilePropsOpen(true)}
                     className="pointer-events-auto flex h-11 items-center gap-2 rounded-2xl border border-amber-500/60 bg-slate-900/95 px-4 text-xs font-bold text-amber-200 shadow-xl backdrop-blur-md transition active:scale-95"
                   >
                     <SlidersHorizontal className="h-4 w-4 text-amber-400" />
@@ -253,33 +308,39 @@ export function App() {
           )}
         </main>
 
-        {/* القائمة اليسرى: خصائص العنصر المحدد (ثابتة على الشاشات الكبيرة) */}
-        <div className="hidden h-full w-72 shrink-0 lg:block xl:w-80">
-          <PropertiesPanel />
+        {/* القائمة اليسرى: خصائص العنصر (قابلة للطي بسلاسة على الكمبيوتر والتابلت) */}
+        <div
+          className={`hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block ${
+            propsSidebarOpen ? 'w-68 lg:w-72' : 'w-0'
+          }`}
+        >
+          <div className="h-full w-68 lg:w-72">
+            <PropertiesPanel />
+          </div>
         </div>
 
-        {/* درج الأجزاء للتابلت والموبايل */}
-        {partsDrawerOpen && (
-          <div className="fixed inset-0 z-40 flex lg:hidden">
+        {/* درج الأجزاء للموبايل والشاشات الصغيرة */}
+        {mobilePartsOpen && (
+          <div className="fixed inset-0 z-40 flex md:hidden">
             <div
               className="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px]"
-              onClick={() => setPartsDrawerOpen(false)}
+              onClick={() => setMobilePartsOpen(false)}
             />
             <div className="relative z-10 h-full w-80 max-w-[85vw] shadow-2xl">
-              <PartsSidebar onCloseMobile={() => setPartsDrawerOpen(false)} />
+              <PartsSidebar onCloseMobile={() => setMobilePartsOpen(false)} />
             </div>
           </div>
         )}
 
-        {/* درج الخصائص للتابلت والموبايل */}
-        {propsDrawerOpen && (
-          <div className="fixed inset-0 z-40 flex justify-end lg:hidden">
+        {/* درج الخصائص للموبايل والشاشات الصغيرة */}
+        {mobilePropsOpen && (
+          <div className="fixed inset-0 z-40 flex justify-end md:hidden">
             <div
               className="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px]"
-              onClick={() => setPropsDrawerOpen(false)}
+              onClick={() => setMobilePropsOpen(false)}
             />
             <div className="relative z-10 h-full w-80 max-w-[88vw] shadow-2xl">
-              <PropertiesPanel onCloseMobile={() => setPropsDrawerOpen(false)} />
+              <PropertiesPanel onCloseMobile={() => setMobilePropsOpen(false)} />
             </div>
           </div>
         )}

@@ -1,11 +1,22 @@
 import type {
   Axis,
+  CameraPreset,
   HingeSide,
   MaterialId,
   PanelCategory,
   PanelDimensions,
   PanelRole,
 } from '../types/furniture'
+
+export const CAMERA_PRESETS: Record<
+  CameraPreset,
+  { position: [number, number, number]; target: [number, number, number] }
+> = {
+  perspective: { position: [145, 115, 175], target: [0, 40, 0] },
+  front: { position: [0, 45, 225], target: [0, 45, 0] },
+  side: { position: [225, 45, 0], target: [0, 45, 0] },
+  top: { position: [0, 245, 0.1], target: [0, 0, 0] },
+}
 
 export interface PanelPreset {
   role: Exclude<PanelRole, 'custom'>

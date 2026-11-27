@@ -33,8 +33,10 @@ import {
   deleteSavedDesign,
   loadAutosave,
   loadSavedDesigns,
+  loadUiPreferences,
   saveAutosave,
   saveDesignByName,
+  saveUiPreferences,
 } from '../utils/storage'
 import { buildGuideLineGeometry, type ReferenceEdge } from '../utils/tapeMeasure'
 
@@ -167,6 +169,9 @@ function getInitialData() {
 }
 
 const initial = getInitialData()
+const initialUiPrefs = loadUiPreferences()
+
+export type ImageExportMode = 'clean' | 'transparent' | 'three_angles'
 
 interface DesignState {
   panels: FurniturePanel[]
@@ -198,8 +203,13 @@ interface DesignState {
   humanPosition: [number, number]
   isDraggingHuman: boolean
   isExporting: boolean
-  exportMode: 'clean' | 'transparent' | null
+  exportMode: ImageExportMode | null
   exportRequestTick: number
+  partsSidebarOpen: boolean
+  propsSidebarOpen: boolean
+  focusMode: boolean
+  preFocusPartsOpen: boolean
+  preFocusPropsOpen: boolean
   statusToast: string | null
 
   cameraPreset: CameraPreset
@@ -241,8 +251,13 @@ interface DesignState {
   setHumanScalePreset: (preset: HumanScalePreset) => void
   setHumanPosition: (x: number, z: number) => void
   setIsDraggingHuman: (dragging: boolean) => void
-  triggerExportImage: (mode: 'clean' | 'transparent') => void
-  finishExportImage: (success: boolean) => void
+  triggerExportImage: (mode: ImageExportMode) => void
+  finishExportImage: (success: boolean, customMessage?: string) => void
+  setPartsSidebarOpen: (open: boolean) => void
+  setPropsSidebarOpen: (open: boolean) => void
+  togglePartsSidebar: () => void
+  togglePropsSidebar: () => void
+  toggleFocusMode: () => void
   clearStatusToast: () => void
 
   // Panel CRUD & Clipboard
@@ -336,6 +351,11 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   isExporting: false,
   exportMode: null,
   exportRequestTick: 0,
+  partsSidebarOpen: initialUiPrefs.partsSidebarOpen,
+  propsSidebarOpen: initialUiPrefs.propsSidebarOpen,
+  focusMode: false,
+  preFocusPartsOpen: initialUiPrefs.partsSidebarOpen,
+  preFocusPropsOpen: initialUiPrefs.propsSidebarOpen,
   statusToast: null,
 
   cameraPreset: 'perspective',
@@ -351,8 +371,15 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   lastSavedAt: null,
 
   selectPanel: (id, additive = false) => {
+    const { focusMode, partsSidebarOpen } = get()
     if (!id) {
-      set({ selectedPanelId: null, selectedPanelIds: [], selectedGuideId: null })
+      if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: false })
+      set({
+        selectedPanelId: null,
+        selectedPanelIds: [],
+        selectedGuideId: null,
+        propsSidebarOpen: false,
+      })
       return
     }
     const { multiSelectMode, selectedPanelIds } = get()
@@ -361,44 +388,68 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       const nextIds = exists
         ? selectedPanelIds.filter((x) => x !== id)
         : [...selectedPanelIds, id]
+      const nextPropsOpen = focusMode ? false : nextIds.length > 0
+      if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: nextPropsOpen })
       set({
         selectedPanelIds: nextIds,
         selectedPanelId: nextIds[nextIds.length - 1] ?? null,
         selectedGuideId: null,
+        propsSidebarOpen: nextPropsOpen,
       })
       return
     }
-    set({ selectedPanelId: id, selectedPanelIds: [id], selectedGuideId: null })
+    const nextPropsOpen = !focusMode
+    if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: nextPropsOpen })
+    set({
+      selectedPanelId: id,
+      selectedPanelIds: [id],
+      selectedGuideId: null,
+      propsSidebarOpen: nextPropsOpen,
+    })
   },
 
   togglePanelSelection: (id) => {
-    const { selectedPanelIds } = get()
+    const { selectedPanelIds, focusMode, partsSidebarOpen } = get()
     const exists = selectedPanelIds.includes(id)
     const nextIds = exists
       ? selectedPanelIds.filter((x) => x !== id)
       : [...selectedPanelIds, id]
+    const nextPropsOpen = focusMode ? false : nextIds.length > 0
+    if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: nextPropsOpen })
     set({
       selectedPanelIds: nextIds,
       selectedPanelId: nextIds[nextIds.length - 1] ?? null,
       selectedGuideId: null,
+      propsSidebarOpen: nextPropsOpen,
     })
   },
 
   setMultiSelectMode: (enabled) => set({ multiSelectMode: enabled }),
 
   selectAllByRole: (roles) => {
-    const matching = get()
-      .panels.filter((p) => roles.includes(p.role))
-      .map((p) => p.id)
+    const { panels, focusMode, partsSidebarOpen } = get()
+    const matching = panels.filter((p) => roles.includes(p.role)).map((p) => p.id)
+    const nextPropsOpen = focusMode ? false : matching.length > 0
+    if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: nextPropsOpen })
     set({
       selectedPanelIds: matching,
       selectedPanelId: matching[matching.length - 1] ?? null,
       selectedGuideId: null,
       multiSelectMode: matching.length > 1,
+      propsSidebarOpen: nextPropsOpen,
     })
   },
 
-  clearSelection: () => set({ selectedPanelId: null, selectedPanelIds: [], selectedGuideId: null }),
+  clearSelection: () => {
+    const { focusMode, partsSidebarOpen } = get()
+    if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: false })
+    set({
+      selectedPanelId: null,
+      selectedPanelIds: [],
+      selectedGuideId: null,
+      propsSidebarOpen: false,
+    })
+  },
 
   setToolMode: (mode) =>
     set({
@@ -587,12 +638,71 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       exportRequestTick: state.exportRequestTick + 1,
     })),
 
-  finishExportImage: (success) =>
+  finishExportImage: (success, customMessage) =>
     set({
       isExporting: false,
       exportMode: null,
-      statusToast: success ? 'تم حفظ الصورة بنجاح' : 'تعذر تصدير الصورة',
+      statusToast: success
+        ? (customMessage ?? 'تم حفظ الصورة بنجاح')
+        : 'تعذر تصدير الصورة',
     }),
+
+  setPartsSidebarOpen: (open) => {
+    const { propsSidebarOpen } = get()
+    saveUiPreferences({ partsSidebarOpen: open, propsSidebarOpen })
+    set({ partsSidebarOpen: open, focusMode: open || propsSidebarOpen ? false : get().focusMode })
+  },
+
+  setPropsSidebarOpen: (open) => {
+    const { partsSidebarOpen } = get()
+    saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: open })
+    set({ propsSidebarOpen: open, focusMode: partsSidebarOpen || open ? false : get().focusMode })
+  },
+
+  togglePartsSidebar: () => {
+    const next = !get().partsSidebarOpen
+    const { propsSidebarOpen } = get()
+    saveUiPreferences({ partsSidebarOpen: next, propsSidebarOpen })
+    set({ partsSidebarOpen: next, focusMode: false })
+  },
+
+  togglePropsSidebar: () => {
+    const next = !get().propsSidebarOpen
+    const { partsSidebarOpen } = get()
+    saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: next })
+    set({ propsSidebarOpen: next, focusMode: false })
+  },
+
+  toggleFocusMode: () => {
+    const {
+      focusMode,
+      partsSidebarOpen,
+      propsSidebarOpen,
+      preFocusPartsOpen,
+      preFocusPropsOpen,
+      selectedPanelIds,
+    } = get()
+    if (!focusMode) {
+      set({
+        focusMode: true,
+        preFocusPartsOpen: partsSidebarOpen,
+        preFocusPropsOpen: propsSidebarOpen,
+        partsSidebarOpen: false,
+        propsSidebarOpen: false,
+      })
+    } else {
+      const nextProps = preFocusPropsOpen || selectedPanelIds.length > 0
+      saveUiPreferences({
+        partsSidebarOpen: preFocusPartsOpen,
+        propsSidebarOpen: nextProps,
+      })
+      set({
+        focusMode: false,
+        partsSidebarOpen: preFocusPartsOpen,
+        propsSidebarOpen: nextProps,
+      })
+    }
+  },
 
   clearStatusToast: () => set({ statusToast: null }),
 
@@ -647,6 +757,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       selectedPanelId: newPanel.id,
       selectedPanelIds: [newPanel.id],
       selectedGuideId: null,
+      propsSidebarOpen: !get().focusMode,
       interfacesHidden: preset.category === 'front' ? false : get().interfacesHidden,
       past: pushPast(past, panels, guides),
       future: [],
@@ -692,22 +803,25 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       panels: nextPanels,
       selectedPanelIds: nextSelectedIds,
       selectedPanelId: nextSelectedIds[nextSelectedIds.length - 1] ?? null,
+      propsSidebarOpen: nextSelectedIds.length > 0 && !get().focusMode,
       past: pushPast(past, panels, guides),
       future: [],
     })
   },
 
   deleteSelectedPanels: () => {
-    const { panels, guides, past, selectedPanelIds } = get()
+    const { panels, guides, past, selectedPanelIds, focusMode, partsSidebarOpen } = get()
     if (selectedPanelIds.length === 0) return
 
     const nextPanels = panels.filter((p) => !selectedPanelIds.includes(p.id))
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+    if (!focusMode) saveUiPreferences({ partsSidebarOpen, propsSidebarOpen: false })
 
     set({
       panels: nextPanels,
       selectedPanelIds: [],
       selectedPanelId: null,
+      propsSidebarOpen: false,
       past: pushPast(past, panels, guides),
       future: [],
     })

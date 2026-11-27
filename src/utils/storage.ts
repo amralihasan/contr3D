@@ -2,6 +2,36 @@ import type { FurniturePanel, GuideLine, SavedDesign } from '../types/furniture'
 
 const DESIGNS_STORAGE_KEY = 'counter_furniture_3d_designs_v1'
 const AUTOSAVE_STORAGE_KEY = 'counter_furniture_3d_autosave_v1'
+const UI_PREFS_STORAGE_KEY = 'counter_furniture_3d_ui_prefs_v1'
+
+export interface UiPreferences {
+  partsSidebarOpen: boolean
+  propsSidebarOpen: boolean
+}
+
+export function loadUiPreferences(): UiPreferences {
+  try {
+    const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY)
+    if (!raw) return { partsSidebarOpen: true, propsSidebarOpen: false }
+    const parsed = JSON.parse(raw)
+    return {
+      partsSidebarOpen:
+        typeof parsed.partsSidebarOpen === 'boolean' ? parsed.partsSidebarOpen : true,
+      propsSidebarOpen:
+        typeof parsed.propsSidebarOpen === 'boolean' ? parsed.propsSidebarOpen : false,
+    }
+  } catch {
+    return { partsSidebarOpen: true, propsSidebarOpen: false }
+  }
+}
+
+export function saveUiPreferences(prefs: UiPreferences): void {
+  try {
+    localStorage.setItem(UI_PREFS_STORAGE_KEY, JSON.stringify(prefs))
+  } catch {
+    // ignore
+  }
+}
 
 export function loadSavedDesigns(): SavedDesign[] {
   try {

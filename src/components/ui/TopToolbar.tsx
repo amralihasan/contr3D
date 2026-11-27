@@ -3,16 +3,17 @@ import {
   Camera,
   ChevronDown,
   ClipboardList,
-  Compass,
   DoorClosed,
   DoorOpen,
   DraftingCompass,
   Eye,
   EyeOff,
-  FolderOpen,
   ImageDown,
+  Images,
   Layers,
   Magnet,
+  Maximize2,
+  Minimize2,
   Redo2,
   Ruler,
   Save,
@@ -24,7 +25,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { CameraPreset } from '../../types/furniture'
 
 interface TopToolbarProps {
   onOpenDesignsModal: () => void
@@ -34,13 +34,6 @@ interface TopToolbarProps {
   isPartsOpen: boolean
   isPropsOpen: boolean
 }
-
-const CAMERA_BUTTONS: { preset: CameraPreset; label: string }[] = [
-  { preset: 'perspective', label: '3D' },
-  { preset: 'front', label: 'أمامي' },
-  { preset: 'side', label: 'جانبي' },
-  { preset: 'top', label: 'علوي' },
-]
 
 export function TopToolbar({
   onOpenDesignsModal,
@@ -78,8 +71,15 @@ export function TopToolbar({
   const toggleHumanReference = useDesignStore((s) => s.toggleHumanReference)
   const humanScalePreset = useDesignStore((s) => s.humanScalePreset)
   const setHumanScalePreset = useDesignStore((s) => s.setHumanScalePreset)
+
+  const focusMode = useDesignStore((s) => s.focusMode)
+  const toggleFocusMode = useDesignStore((s) => s.toggleFocusMode)
+
   const triggerExportImage = useDesignStore((s) => s.triggerExportImage)
   const isExporting = useDesignStore((s) => s.isExporting)
+
+  const currentDesignName = useDesignStore((s) => s.currentDesignName)
+  const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
 
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
@@ -95,272 +95,242 @@ export function TopToolbar({
     return () => window.removeEventListener('pointerdown', onOutside)
   }, [exportMenuOpen])
 
-  const cameraPreset = useDesignStore((s) => s.cameraPreset)
-  const setCameraPreset = useDesignStore((s) => s.setCameraPreset)
-  const currentDesignName = useDesignStore((s) => s.currentDesignName)
-  const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
-
   return (
-    <header className="z-30 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-900/95 px-3 py-2 backdrop-blur-md">
-      {/* الشعار واسم التصميم + زر قائمة الألواح للشاشات المتوسطة والصغيرة */}
-      <div className="flex items-center gap-2">
+    <header className="z-30 flex h-[52px] min-h-[52px] items-center justify-between gap-2 border-b border-slate-800/90 bg-slate-900/95 px-2.5 backdrop-blur-md">
+      {/* اليمين: قائمة الأجزاء (للموبايل) + اسم المشروع + التراجع والإعادة */}
+      <div className="flex min-w-0 items-center gap-1.5">
         <button
           type="button"
           onClick={onTogglePartsDrawer}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition lg:hidden ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition md:hidden ${
             isPartsOpen
               ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
-              : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
+              : 'border-slate-700/80 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
           }`}
-          title="الأجزاء والقطع"
+          title="مكتبة الأجزاء"
+          aria-label="مكتبة الأجزاء"
         >
           <Layers className="h-4 w-4" />
-          <span className="hidden sm:inline">الأجزاء</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">
-            <Box className="h-5 w-5" />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">
+            <Box className="h-4 w-4" />
           </div>
-          <div className="leading-tight">
-            <h1 className="text-sm font-bold text-slate-100 sm:text-base">
-              مصمم أثاث الكونتر 3D
-            </h1>
-            <p className="max-w-[140px] truncate text-xs text-slate-400 sm:max-w-[180px]">
-              {currentDesignName}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* أزرار الكاميرا + المتر والعلام + أدوات المعاينة */}
-      <div className="order-3 flex w-full flex-wrap items-center justify-center gap-1.5 pt-1 xl:order-2 xl:w-auto xl:pt-0">
-        <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
-          <span className="hidden items-center gap-1 px-2 text-xs text-slate-400 md:flex">
-            <Compass className="h-3.5 w-3.5" />
+          <span className="hidden max-w-[140px] truncate text-xs font-bold text-slate-100 sm:inline lg:max-w-[170px]">
+            {currentDesignName}
           </span>
-          {CAMERA_BUTTONS.map((btn) => {
-            const active = cameraPreset === btn.preset
-            return (
-              <button
-                key={btn.preset}
-                type="button"
-                onClick={() => setCameraPreset(btn.preset)}
-                className={`h-9 min-w-[44px] rounded-lg px-2.5 text-xs font-bold transition ${
-                  active
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {btn.label}
-              </button>
-            )
-          })}
         </div>
 
-        {/* زر أداة المتر / العلام + أزرار إدارة العلامات */}
+        <div className="mx-1 hidden h-5 w-px bg-slate-800 sm:block" />
+
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setToolMode(toolMode === 'tape' ? 'select' : 'tape')}
-            className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
-              toolMode === 'tape'
-                ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/40'
-                : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
-            }`}
-            title="أداة المتر والخطوط الإرشادية (وضع العلام والقياس)"
+            onClick={undo}
+            disabled={pastCount === 0}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-800/70 text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+            title="تراجع (Ctrl+Z)"
+            aria-label="تراجع"
           >
-            <Ruler className="h-4 w-4 text-cyan-300" />
-            <span>المتر / العلام</span>
+            <Undo2 className="h-4 w-4" />
           </button>
-
-          {guidesCount > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={toggleGuidesVisible}
-                className={`flex h-11 items-center gap-1 rounded-xl border px-2.5 text-xs font-bold transition ${
-                  guidesVisible
-                    ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-200'
-                    : 'border-slate-700 bg-slate-800/80 text-slate-400'
-                }`}
-                title={guidesVisible ? 'إخفاء العلامات مؤقتاً' : 'إظهار العلامات'}
-              >
-                {guidesVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                <span className="tabular-nums">{guidesCount}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={clearAllGuides}
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
-                title="مسح كل العلامات"
-                aria-label="مسح كل العلامات"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={redo}
+            disabled={futureCount === 0}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-800/70 text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
+            title="إعادة (Ctrl+Y)"
+            aria-label="إعادة"
+          >
+            <Redo2 className="h-4 w-4" />
+          </button>
         </div>
+      </div>
 
-        {/* فتح / إغلاق الضلف والأدراج */}
-        <button
-          type="button"
-          onClick={toggleInterfacesOpen}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
-            interfacesOpen
-              ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
-              : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-          }`}
-          title="فتح أو إغلاق الضلف والأدراج لمعاينة الداخل"
-        >
-          {interfacesOpen ? (
-            <DoorOpen className="h-4 w-4 text-amber-400" />
-          ) : (
-            <DoorClosed className="h-4 w-4 text-slate-400" />
-          )}
-          <span className="hidden sm:inline">
-            {interfacesOpen ? 'إغلاق الواجهات' : 'فتح الواجهات'}
-          </span>
-        </button>
-
-        {/* إخفاء الضلف والأدراج مؤقتاً */}
-        <button
-          type="button"
-          onClick={toggleInterfacesHidden}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
-            interfacesHidden
-              ? 'border-violet-500/60 bg-violet-500/20 text-violet-200'
-              : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-          }`}
-          title="إخفاء الضلف والأدراج مؤقتاً لتعديل الأرفف الداخلية"
-        >
-          {interfacesHidden ? (
-            <EyeOff className="h-4 w-4 text-violet-300" />
-          ) : (
-            <Eye className="h-4 w-4 text-slate-400" />
-          )}
-          <span className="hidden md:inline">
-            {interfacesHidden ? 'إظهار الضلف' : 'إخفاء الضلف'}
-          </span>
-        </button>
-
-        {/* إظهار / إخفاء المقاسات 3D */}
-        <button
-          type="button"
-          onClick={toggleShowDimensions}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
-            showDimensions
-              ? 'border-sky-500/60 bg-sky-500/15 text-sky-200'
-              : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
-          }`}
-          title="إظهار أو إخفاء خطوط المقاسات ثلاثية الأبعاد"
-        >
-          <DraftingCompass className="h-4 w-4" />
-          <span className="hidden sm:inline">المقاسات</span>
-        </button>
-
-        {/* زر المغناطيس الذكي */}
+      {/* المنتصف: أدوات التصميم الأساسية كأيقونات نظيفة مع Tooltips */}
+      <div className="flex items-center gap-1 overflow-x-auto px-1 py-0.5 [scrollbar-width:none]">
         <button
           type="button"
           onClick={() => setSnappingEnabled(!snappingEnabled)}
-          className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
             snappingEnabled
               ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
-              : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:text-slate-200'
           }`}
-          title="تفعيل أو إيقاف المغناطيس الذكي (0.5 سم + الالتصاق بالأسطح والعلامات)"
+          title="المغناطيس الذكي (0.5 سم + الالتصاق بالأسطح والعلامات)"
+          aria-label="المغناطيس الذكي"
         >
           <Magnet className="h-4 w-4" />
-          <span className="hidden sm:inline">المغناطيس</span>
         </button>
 
-        {/* زر المجسم البشري المرجعي ومختار الطول */}
-        <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setToolMode(toolMode === 'tape' ? 'select' : 'tape')}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
+            toolMode === 'tape'
+              ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="أداة المتر والعلام (عمل خطوط إرشادية وقياس المسافات)"
+          aria-label="أداة المتر والعلام"
+        >
+          <Ruler className="h-4 w-4" />
+        </button>
+
+        {guidesCount > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={toggleGuidesVisible}
+              className={`flex h-9 items-center gap-1 rounded-xl border px-2 text-[11px] font-bold transition ${
+                guidesVisible
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-200'
+                  : 'border-slate-700/80 bg-slate-800/70 text-slate-400'
+              }`}
+              title={guidesVisible ? 'إخفاء العلامات' : 'إظهار العلامات'}
+            >
+              {guidesVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              <span className="tabular-nums">{guidesCount}</span>
+            </button>
+            <button
+              type="button"
+              onClick={clearAllGuides}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+              title="مسح كل العلامات"
+              aria-label="مسح كل العلامات"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={toggleShowDimensions}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
+            showDimensions
+              ? 'border-sky-500/50 bg-sky-500/15 text-sky-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:text-slate-200'
+          }`}
+          title="إظهار / إخفاء خطوط المقاسات 3D"
+          aria-label="المقاسات 3D"
+        >
+          <DraftingCompass className="h-4 w-4" />
+        </button>
+
+        <div className="mx-0.5 hidden h-5 w-px bg-slate-800 sm:block" />
+
+        <button
+          type="button"
+          onClick={toggleInterfacesOpen}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
+            interfacesOpen
+              ? 'border-amber-500/60 bg-amber-500/20 text-amber-300'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title={interfacesOpen ? 'إغلاق الضلف والأدراج' : 'فتح الضلف والأدراج'}
+          aria-label="فتح / إغلاق الواجهات"
+        >
+          {interfacesOpen ? <DoorOpen className="h-4 w-4" /> : <DoorClosed className="h-4 w-4" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleInterfacesHidden}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
+            interfacesHidden
+              ? 'border-violet-500/60 bg-violet-500/20 text-violet-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title={interfacesHidden ? 'إظهار الضلف والأدراج' : 'إخفاء الضلف والأدراج مؤقتاً'}
+          aria-label="إخفاء / إظهار الضلف"
+        >
+          {interfacesHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+
+        <div className="mx-0.5 hidden h-5 w-px bg-slate-800 sm:block" />
+
+        <button
+          type="button"
+          onClick={toggleHumanReference}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
+            showHumanReference
+              ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="إظهار / إخفاء المجسم البشري المرجعي"
+          aria-label="المقياس البشري"
+        >
+          <User className="h-4 w-4" />
+        </button>
+
+        {showHumanReference && (
           <button
             type="button"
-            onClick={toggleHumanReference}
-            className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
-              showHumanReference
-                ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
-                : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-            }`}
-            title="إظهار أو إخفاء المجسم البشري المرجعي لمقارنة المقاسات"
+            onClick={() =>
+              setHumanScalePreset(humanScalePreset === 'adult' ? 'child' : 'adult')
+            }
+            className="tabular-nums h-9 shrink-0 rounded-xl border border-amber-400/40 bg-slate-950/80 px-2 text-[11px] font-bold text-amber-200 hover:bg-slate-800"
+            title="اضغط للتبديل بين شخص بالغ (175 سم) وطفل (110 سم)"
           >
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">مقياس بشري</span>
+            {humanScalePreset === 'adult' ? '175 سم' : '110 سم'}
           </button>
+        )}
 
-          {showHumanReference && (
-            <div className="flex items-center gap-0.5 rounded-xl border border-slate-700 bg-slate-950/80 p-1">
-              <button
-                type="button"
-                onClick={() => setHumanScalePreset('adult')}
-                className={`h-9 rounded-lg px-2 text-[11px] font-bold transition ${
-                  humanScalePreset === 'adult'
-                    ? 'bg-amber-500 text-slate-950'
-                    : 'text-slate-300 hover:bg-slate-800'
-                }`}
-                title="شخص بالغ (175 سم)"
-              >
-                175 سم
-              </button>
-              <button
-                type="button"
-                onClick={() => setHumanScalePreset('child')}
-                className={`h-9 rounded-lg px-2 text-[11px] font-bold transition ${
-                  humanScalePreset === 'child'
-                    ? 'bg-amber-500 text-slate-950'
-                    : 'text-slate-300 hover:bg-slate-800'
-                }`}
-                title="طفل (110 سم)"
-              >
-                110 سم
-              </button>
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={toggleFocusMode}
+          className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition md:flex ${
+            focusMode
+              ? 'border-amber-400 bg-amber-500 text-slate-950'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="وضع التركيز / ملء الشاشة (Tab)"
+          aria-label="وضع التركيز"
+        >
+          {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
       </div>
 
-      {/* التراجع والإعادة والحفظ وتقرير الورشة */}
-      <div className="order-2 flex items-center gap-1.5 xl:order-3">
+      {/* اليسار: حفظ، تقرير الورشة، وتصدير صورة */}
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          onClick={undo}
-          disabled={pastCount === 0}
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700/90 bg-slate-800/80 text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
-          title="تراجع (Ctrl+Z)"
-          aria-label="تراجع"
+          onClick={onOpenDesignsModal}
+          className="flex h-9 items-center gap-1.5 rounded-xl bg-amber-500 px-2.5 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98]"
+          title="حفظ واسترجاع التصاميم"
         >
-          <Undo2 className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={redo}
-          disabled={futureCount === 0}
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700/90 bg-slate-800/80 text-slate-200 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
-          title="إعادة (Ctrl+Y)"
-          aria-label="إعادة"
-        >
-          <Redo2 className="h-4 w-4" />
+          <Save className="h-4 w-4" />
+          <span className="hidden lg:inline">حفظ</span>
         </button>
 
-        {/* قائمة تصدير صورة PNG عالية الجودة */}
+        <button
+          type="button"
+          onClick={onOpenWorkshopReport}
+          className="flex h-9 items-center gap-1.5 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-2.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-[0.98]"
+          title="تقرير الورشة وكشف التقطيع ورص الألواح"
+        >
+          <ClipboardList className="h-4 w-4 text-emerald-300" />
+          <span className="hidden xl:inline">تقرير الورشة</span>
+        </button>
+
+        {/* تصدير صورة (3 خيارات) */}
         <div className="relative" ref={exportMenuRef}>
           <button
             type="button"
             disabled={isExporting}
             onClick={() => setExportMenuOpen((v) => !v)}
-            className="flex h-11 items-center gap-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 px-3 text-xs font-bold text-sky-200 transition hover:bg-sky-500/25 active:scale-[0.98] disabled:opacity-50 sm:text-sm"
-            title="تصدير لقطة 3D عالية الجودة (PNG)"
+            className="flex h-9 items-center gap-1 rounded-xl border border-sky-500/45 bg-sky-500/15 px-2.5 text-xs font-bold text-sky-200 transition hover:bg-sky-500/25 active:scale-[0.98] disabled:opacity-50"
+            title="تصدير صورة PNG عالية الجودة"
           >
             <ImageDown className="h-4 w-4 text-sky-300" />
-            <span className="hidden md:inline">تصدير صورة</span>
-            <ChevronDown className="h-3.5 w-3.5 text-sky-300/80" />
+            <span className="hidden lg:inline">تصدير</span>
+            <ChevronDown className="h-3 w-3 text-sky-300/80" />
           </button>
 
           {exportMenuOpen && (
-            <div className="absolute left-0 top-12 z-50 w-60 rounded-2xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md">
+            <div className="absolute left-0 top-11 z-50 w-64 rounded-2xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md">
               <button
                 type="button"
                 onClick={() => {
@@ -371,9 +341,9 @@ export function TopToolbar({
               >
                 <Camera className="h-4 w-4 shrink-0 text-sky-400" />
                 <div>
-                  <div>صورة بخلفية نظيفة</div>
+                  <div>صورة بالزاوية الحالية</div>
                   <div className="text-[10px] font-normal text-slate-400">
-                    خلفية استوديو فاتحة بدون شبكة
+                    خلفية استوديو نظيفة بدون شبكة
                   </div>
                 </div>
               </button>
@@ -390,7 +360,24 @@ export function TopToolbar({
                 <div>
                   <div>صورة بخلفية شفافة (PNG)</div>
                   <div className="text-[10px] font-normal text-slate-400">
-                    جاهزة للتركيب في التصميمات
+                    شفافة تماماً للتركيب والتصميم
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  triggerExportImage('three_angles')
+                }}
+                className="mt-1 flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-right text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+              >
+                <Images className="h-4 w-4 shrink-0 text-emerald-400" />
+                <div>
+                  <div>تصدير 3 زوايا تلقائياً</div>
+                  <div className="text-[10px] font-normal text-slate-400">
+                    أمامي + جانبي + 3D دفعة واحدة
                   </div>
                 </div>
               </button>
@@ -400,34 +387,14 @@ export function TopToolbar({
 
         <button
           type="button"
-          onClick={onOpenWorkshopReport}
-          className="flex h-11 items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-3 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/25 active:scale-[0.98] sm:text-sm"
-          title="تقرير الورشة وكشف التقطيع ورص الألواح"
-        >
-          <ClipboardList className="h-4 w-4 text-emerald-300" />
-          <span className="hidden md:inline">تقرير الورشة / التقطيع</span>
-          <span className="md:hidden">التقطيع</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenDesignsModal}
-          className="flex h-11 items-center gap-1.5 rounded-xl bg-amber-500 px-3 text-xs font-bold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98] sm:text-sm"
-        >
-          <Save className="h-4 w-4" />
-          <span className="hidden sm:inline">حفظ</span>
-          <FolderOpen className="h-4 w-4 sm:hidden" />
-        </button>
-
-        <button
-          type="button"
           onClick={onTogglePropsDrawer}
-          className={`relative flex h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition lg:hidden ${
+          className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition md:hidden ${
             isPropsOpen
               ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
-              : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
+              : 'border-slate-700/80 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
           }`}
-          title="خصائص العنصر المحدد"
+          title="خصائص العنصر"
+          aria-label="خصائص العنصر"
         >
           <SlidersHorizontal className="h-4 w-4" />
           {selectedPanelIds.length > 0 && (
