@@ -24,6 +24,7 @@ export function CameraRig() {
   const cameraRequestTick = useDesignStore((s) => s.cameraRequestTick)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
+  const isDraggingHuman = useDesignStore((s) => s.isDraggingHuman)
 
   const animatingRef = useRef(false)
   const desiredPosRef = useRef(new THREE.Vector3(...CAMERA_PRESETS.perspective.position))
@@ -59,7 +60,7 @@ export function CameraRig() {
       <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled={!isDraggingGizmo && !isDraggingTape}
+      enabled={!isDraggingGizmo && !isDraggingTape && !isDraggingHuman}
       enableDamping
       dampingFactor={0.08}
       rotateSpeed={0.85}

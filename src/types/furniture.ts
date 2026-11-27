@@ -79,6 +79,13 @@ export type ToolMode = 'select' | 'tape'
 
 export type TapeMode = 'guide' | 'measure'
 
+export type HumanScalePreset = 'adult' | 'child'
+
+export const HUMAN_SCALE_HEIGHTS_CM: Record<HumanScalePreset, number> = {
+  adult: 175,
+  child: 110,
+}
+
 export interface GuideLine {
   id: string
   /** اللوح المرجعي الذي أُنشئ العلام بالنسبة له */

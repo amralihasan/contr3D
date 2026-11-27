@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Undo2,
+  User,
 } from 'lucide-react'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { CameraPreset } from '../../types/furniture'
@@ -67,6 +68,11 @@ export function TopToolbar({
 
   const showDimensions = useDesignStore((s) => s.showDimensions)
   const toggleShowDimensions = useDesignStore((s) => s.toggleShowDimensions)
+
+  const showHumanReference = useDesignStore((s) => s.showHumanReference)
+  const toggleHumanReference = useDesignStore((s) => s.toggleHumanReference)
+  const humanScalePreset = useDesignStore((s) => s.humanScalePreset)
+  const setHumanScalePreset = useDesignStore((s) => s.setHumanScalePreset)
 
   const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const setCameraPreset = useDesignStore((s) => s.setCameraPreset)
@@ -247,6 +253,52 @@ export function TopToolbar({
           <Magnet className="h-4 w-4" />
           <span className="hidden sm:inline">المغناطيس</span>
         </button>
+
+        {/* زر المجسم البشري المرجعي ومختار الطول */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleHumanReference}
+            className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+              showHumanReference
+                ? 'border-amber-400/60 bg-amber-500/20 text-amber-200'
+                : 'border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+            }`}
+            title="إظهار أو إخفاء المجسم البشري المرجعي لمقارنة المقاسات"
+          >
+            <User className="h-4 w-4" />
+            <span className="hidden sm:inline">مقياس بشري</span>
+          </button>
+
+          {showHumanReference && (
+            <div className="flex items-center gap-0.5 rounded-xl border border-slate-700 bg-slate-950/80 p-1">
+              <button
+                type="button"
+                onClick={() => setHumanScalePreset('adult')}
+                className={`h-9 rounded-lg px-2 text-[11px] font-bold transition ${
+                  humanScalePreset === 'adult'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+                title="شخص بالغ (175 سم)"
+              >
+                175 سم
+              </button>
+              <button
+                type="button"
+                onClick={() => setHumanScalePreset('child')}
+                className={`h-9 rounded-lg px-2 text-[11px] font-bold transition ${
+                  humanScalePreset === 'child'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+                title="طفل (110 سم)"
+              >
+                110 سم
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* التراجع والإعادة والحفظ وتقرير الورشة */}

@@ -17,6 +17,7 @@ import {
   type FurniturePanel,
   type GuideLine,
   type HingeSide,
+  type HumanScalePreset,
   type MaterialId,
   type PanelDimensions,
   type PanelRole,
@@ -191,6 +192,10 @@ interface DesignState {
   interfacesOpen: boolean
   interfacesHidden: boolean
   showDimensions: boolean
+  showHumanReference: boolean
+  humanScalePreset: HumanScalePreset
+  humanPosition: [number, number]
+  isDraggingHuman: boolean
   statusToast: string | null
 
   cameraPreset: CameraPreset
@@ -228,6 +233,10 @@ interface DesignState {
   toggleInterfacesOpen: () => void
   toggleInterfacesHidden: () => void
   toggleShowDimensions: () => void
+  toggleHumanReference: () => void
+  setHumanScalePreset: (preset: HumanScalePreset) => void
+  setHumanPosition: (x: number, z: number) => void
+  setIsDraggingHuman: (dragging: boolean) => void
   clearStatusToast: () => void
 
   // Panel CRUD
@@ -308,6 +317,10 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   interfacesOpen: false,
   interfacesHidden: false,
   showDimensions: true,
+  showHumanReference: false,
+  humanScalePreset: 'adult',
+  humanPosition: [-95, 0],
+  isDraggingHuman: false,
   statusToast: null,
 
   cameraPreset: 'perspective',
@@ -541,6 +554,15 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
   toggleShowDimensions: () =>
     set((state) => ({ showDimensions: !state.showDimensions })),
+
+  toggleHumanReference: () =>
+    set((state) => ({ showHumanReference: !state.showHumanReference })),
+
+  setHumanScalePreset: (preset) => set({ humanScalePreset: preset }),
+
+  setHumanPosition: (x, z) => set({ humanPosition: [x, z] }),
+
+  setIsDraggingHuman: (dragging) => set({ isDraggingHuman: dragging }),
 
   clearStatusToast: () => set({ statusToast: null }),
 

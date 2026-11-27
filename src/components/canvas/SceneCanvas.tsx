@@ -6,6 +6,7 @@ import { isInterfaceRole } from '../../types/furniture'
 import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
 import { GuideLines3D } from './GuideLines3D'
+import { HumanReference } from './HumanReference'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
 import { TapeMeasureTool } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
@@ -83,6 +84,7 @@ export function SceneCanvas() {
         </group>
 
         <GuideLines3D />
+        <HumanReference />
         <TapeMeasureTool objectMap={objectMap} />
         <DimensionsOverlay3D />
         <PanelTransformGizmo selectedObject={selectedObject} />
