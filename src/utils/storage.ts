@@ -1,4 +1,4 @@
-import type { FurniturePanel, SavedDesign } from '../types/furniture'
+import type { FurniturePanel, GuideLine, SavedDesign } from '../types/furniture'
 
 const DESIGNS_STORAGE_KEY = 'counter_furniture_3d_designs_v1'
 const AUTOSAVE_STORAGE_KEY = 'counter_furniture_3d_autosave_v1'
@@ -26,6 +26,7 @@ export function persistSavedDesigns(designs: SavedDesign[]): void {
 export function saveDesignByName(
   name: string,
   panels: FurniturePanel[],
+  guides: GuideLine[],
   existingId?: string | null
 ): { design: SavedDesign; allDesigns: SavedDesign[] } {
   const trimmed = name.trim() || 'تصميم بدون اسم'
@@ -45,6 +46,7 @@ export function saveDesignByName(
       name: trimmed,
       updatedAt: now,
       panels: structuredClone(panels),
+      guides: structuredClone(guides),
     }
     nextList = existingList.map((d) => (d.id === matchById.id ? updatedDesign : d))
   } else {
@@ -53,6 +55,7 @@ export function saveDesignByName(
       name: trimmed,
       updatedAt: now,
       panels: structuredClone(panels),
+      guides: structuredClone(guides),
     }
     nextList = [updatedDesign, ...existingList]
   }
@@ -68,11 +71,16 @@ export function deleteSavedDesign(id: string): SavedDesign[] {
   return next
 }
 
-export function saveAutosave(panels: FurniturePanel[], designName: string, designId: string | null): void {
+export function saveAutosave(
+  panels: FurniturePanel[],
+  guides: GuideLine[],
+  designName: string,
+  designId: string | null
+): void {
   try {
     localStorage.setItem(
       AUTOSAVE_STORAGE_KEY,
-      JSON.stringify({ panels, designName, designId, updatedAt: Date.now() })
+      JSON.stringify({ panels, guides, designName, designId, updatedAt: Date.now() })
     )
   } catch {
     // ignore
@@ -81,6 +89,7 @@ export function saveAutosave(panels: FurniturePanel[], designName: string, desig
 
 export function loadAutosave(): {
   panels: FurniturePanel[]
+  guides: GuideLine[]
   designName: string
   designId: string | null
 } | null {
@@ -91,6 +100,7 @@ export function loadAutosave(): {
     if (!parsed || !Array.isArray(parsed.panels)) return null
     return {
       panels: parsed.panels,
+      guides: Array.isArray(parsed.guides) ? parsed.guides : [],
       designName: typeof parsed.designName === 'string' ? parsed.designName : 'تصميم جديد',
       designId: typeof parsed.designId === 'string' ? parsed.designId : null,
     }

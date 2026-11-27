@@ -5,7 +5,9 @@ import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole } from '../../types/furniture'
 import { CameraRig } from './CameraRig'
 import { DimensionsOverlay3D } from './DimensionsOverlay3D'
+import { GuideLines3D } from './GuideLines3D'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
+import { TapeMeasureTool } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
 
@@ -15,7 +17,10 @@ export function SceneCanvas() {
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
+  const isDraggingTape = useDesignStore((s) => s.isDraggingTape)
+  const toolMode = useDesignStore((s) => s.toolMode)
   const selectPanel = useDesignStore((s) => s.selectPanel)
+  const selectGuide = useDesignStore((s) => s.selectGuide)
 
   const [objectMap, setObjectMap] = useState<Record<string, THREE.Object3D>>({})
 
@@ -45,15 +50,21 @@ export function SceneCanvas() {
     selectedPanelId && !isSelectedHidden ? objectMap[selectedPanelId] ?? null : null
 
   return (
-    <div className="relative h-full w-full canvas-touch-lock">
+    <div
+      className={`relative h-full w-full canvas-touch-lock ${
+        toolMode === 'tape' ? 'cursor-crosshair' : ''
+      }`}
+    >
       <Canvas
         shadows
         dpr={[1, 2]}
         camera={{ position: [145, 115, 175], fov: 42, near: 1, far: 1500 }}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         onPointerMissed={() => {
-          if (!isDraggingGizmo) {
+          if (!isDraggingGizmo && !isDraggingTape && toolMode === 'select') {
             selectPanel(null)
+          } else if (toolMode === 'tape') {
+            selectGuide(null)
           }
         }}
       >
@@ -71,6 +82,8 @@ export function SceneCanvas() {
           ))}
         </group>
 
+        <GuideLines3D />
+        <TapeMeasureTool objectMap={objectMap} />
         <DimensionsOverlay3D />
         <PanelTransformGizmo selectedObject={selectedObject} />
       </Canvas>

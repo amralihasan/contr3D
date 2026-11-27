@@ -5,6 +5,7 @@ import { ViewportOverlay } from './components/canvas/ViewportOverlay'
 import { DesignsModal } from './components/ui/DesignsModal'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
+import { TapeMeasureHud } from './components/ui/TapeMeasureHud'
 import { TopToolbar } from './components/ui/TopToolbar'
 import { WorkshopReportModal } from './components/ui/WorkshopReportModal'
 import { useDesignStore } from './store/useDesignStore'
@@ -17,11 +18,18 @@ export function App() {
 
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
+  const selectedGuideId = useDesignStore((s) => s.selectedGuideId)
+  const toolMode = useDesignStore((s) => s.toolMode)
+  const activeReferenceEdge = useDesignStore((s) => s.activeReferenceEdge)
   const panels = useDesignStore((s) => s.panels)
   const undo = useDesignStore((s) => s.undo)
   const redo = useDesignStore((s) => s.redo)
   const deleteSelectedPanels = useDesignStore((s) => s.deleteSelectedPanels)
+  const deleteGuide = useDesignStore((s) => s.deleteGuide)
+  const selectGuide = useDesignStore((s) => s.selectGuide)
   const selectPanel = useDesignStore((s) => s.selectPanel)
+  const setToolMode = useDesignStore((s) => s.setToolMode)
+  const setActiveReferenceEdge = useDesignStore((s) => s.setActiveReferenceEdge)
   const autoDistributeSelected = useDesignStore((s) => s.autoDistributeSelected)
 
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
@@ -55,10 +63,17 @@ export function App() {
         return
       }
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPanelIds.length > 0) {
-        e.preventDefault()
-        deleteSelectedPanels()
-        return
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedGuideId) {
+          e.preventDefault()
+          deleteGuide(selectedGuideId)
+          return
+        }
+        if (selectedPanelIds.length > 0) {
+          e.preventDefault()
+          deleteSelectedPanels()
+          return
+        }
       }
 
       if (e.key === 'Escape') {
@@ -66,6 +81,12 @@ export function App() {
           setWorkshopReportOpen(false)
         } else if (designsModalOpen) {
           setDesignsModalOpen(false)
+        } else if (activeReferenceEdge) {
+          setActiveReferenceEdge(null)
+        } else if (selectedGuideId) {
+          selectGuide(null)
+        } else if (toolMode === 'tape') {
+          setToolMode('select')
         } else if (selectedPanelIds.length > 0) {
           selectPanel(null)
         }
@@ -78,11 +99,21 @@ export function App() {
     undo,
     redo,
     deleteSelectedPanels,
+    deleteGuide,
+    selectGuide,
     selectPanel,
+    setToolMode,
+    setActiveReferenceEdge,
     selectedPanelIds,
+    selectedGuideId,
+    toolMode,
+    activeReferenceEdge,
     designsModalOpen,
     workshopReportOpen,
   ])
+
+  const hideFloatingPanelButtons =
+    propsDrawerOpen || Boolean(selectedGuideId) || Boolean(activeReferenceEdge)
 
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100 print:hidden">
@@ -111,9 +142,10 @@ export function App() {
         <main className="relative h-full min-w-0 flex-1">
           <SceneCanvas />
           <ViewportOverlay />
+          <TapeMeasureHud />
 
-          {/* أزرار عائمة مريحة للتابلت عند التحديد */}
-          {selectedPanelIds.length >= 2 && !propsDrawerOpen && (
+          {/* أزرار عائمة مريحة للتابلت عند تحديد الألواح */}
+          {selectedPanelIds.length >= 2 && !hideFloatingPanelButtons && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2 px-4 lg:hidden">
               <button
                 type="button"
@@ -134,7 +166,7 @@ export function App() {
             </div>
           )}
 
-          {selectedPanelIds.length === 1 && selectedPanel && !propsDrawerOpen && (
+          {selectedPanelIds.length === 1 && selectedPanel && !hideFloatingPanelButtons && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4 lg:hidden">
               <button
                 type="button"

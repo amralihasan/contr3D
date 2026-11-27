@@ -75,11 +75,52 @@ export interface FurniturePanel {
   hingeSide?: HingeSide
 }
 
+export type ToolMode = 'select' | 'tape'
+
+export type TapeMode = 'guide' | 'measure'
+
+export interface GuideLine {
+  id: string
+  /** اللوح المرجعي الذي أُنشئ العلام بالنسبة له */
+  panelId: string
+  /** اسم اللوح المرجعي للعرض */
+  panelName: string
+  /** وصف الحافة المرجعية (مثلاً: الحافة السفلية) */
+  edgeLabel: string
+  /** المحور الذي يمتد عليه الخط الإرشادي */
+  lineAxis: Axis
+  /** محور الإزاحة العمودي على الحافة المرجعية */
+  offsetAxis: Axis
+  /** محور الوجه المضغوط */
+  normalAxis: Axis
+  /** إحداثي السطح المضغوط على محور normalAxis */
+  surfaceCoord: number
+  /** إشارة السطح (+1 أو -1) لإظهار العلام بوضوح فوق السطح */
+  surfaceSign: 1 | -1
+  /** إحداثي الحافة المرجعية على محور offsetAxis */
+  referenceEdgeCoord: number
+  /** اتجاه الإزاحة (+1 أو -1) */
+  direction: 1 | -1
+  /** المسافة بالسنتيمتر من الحافة المرجعية */
+  distanceCm: number
+  /** الإحداثي العالمي النهائي على محور offsetAxis */
+  worldCoord: number
+  /** نطاق الامتداد على محور lineAxis */
+  spanMin: number
+  spanMax: number
+  /** نقطتا بداية ونهاية الخط الإرشادي للعرض */
+  spanStart: Vec3
+  spanEnd: Vec3
+  /** موقع التسمية الرقمية */
+  labelPosition: Vec3
+}
+
 export interface SavedDesign {
   id: string
   name: string
   updatedAt: number
   panels: FurniturePanel[]
+  guides?: GuideLine[]
 }
 
 export interface SnapFeedback {
@@ -87,6 +128,7 @@ export interface SnapFeedback {
   y: boolean
   z: boolean
   floor: boolean
+  guide?: boolean
 }
 
 export function getPanelCategory(panel: Pick<FurniturePanel, 'role' | 'category'>): PanelCategory {

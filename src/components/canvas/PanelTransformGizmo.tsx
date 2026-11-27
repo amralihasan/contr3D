@@ -11,6 +11,7 @@ interface PanelTransformGizmoProps {
 export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps) {
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const panels = useDesignStore((s) => s.panels)
+  const toolMode = useDesignStore((s) => s.toolMode)
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
   const beginTransformDrag = useDesignStore((s) => s.beginTransformDrag)
   const movePanelLive = useDesignStore((s) => s.movePanelLive)
@@ -24,6 +25,7 @@ export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps
     if (!state.isDraggingGizmo) return
 
     const otherPanels = state.panels.filter((p) => p.id !== selectedPanel.id)
+    const activeGuides = state.guidesVisible ? state.guides : []
     const proposed: [number, number, number] = [
       selectedObject.position.x,
       selectedObject.position.y,
@@ -34,14 +36,15 @@ export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps
       selectedPanel,
       proposed,
       otherPanels,
-      snappingEnabled
+      snappingEnabled,
+      activeGuides
     )
 
     selectedObject.position.set(position[0], position[1], position[2])
     movePanelLive(selectedPanel.id, position, feedback)
   }, [selectedObject, selectedPanel, snappingEnabled, movePanelLive])
 
-  if (!selectedObject || !selectedPanel) return null
+  if (!selectedObject || !selectedPanel || toolMode !== 'select') return null
 
   return (
     <TransformControls

@@ -1,6 +1,12 @@
 import * as THREE from 'three'
 import { GRID_STEP_CM, SNAP_THRESHOLD_CM } from '../constants/presets'
-import type { FurniturePanel, PanelDimensions, SnapFeedback, Vec3 } from '../types/furniture'
+import type {
+  FurniturePanel,
+  GuideLine,
+  PanelDimensions,
+  SnapFeedback,
+  Vec3,
+} from '../types/furniture'
 
 export interface WorldBox {
   minX: number
@@ -78,14 +84,16 @@ export interface SnapResult {
 /**
  * يحسب الموضع الجديد للوح مع المغناطيس الذكي:
  * 1) الالتصاق بسطح الأرض (Y = 0) ومنع الغوص تحت الأرض
- * 2) الالتصاق بأسطح وحواف الألواح القريبة لمنع التداخل أو الفراغات العشوائية
- * 3) التحرك بخطوات دقيقة (0.5 سم) للمحاور التي لم تلتصق بسطح آخر
+ * 2) الالتصاق بالخطوط الإرشادية (العلامات) من الحواف أو المنتصف
+ * 3) الالتصاق بأسطح وحواف الألواح القريبة لمنع التداخل أو الفراغات العشوائية
+ * 4) التحرك بخطوات دقيقة (0.5 سم) للمحاور التي لم تلتصق بسطح أو علام
  */
 export function computeSnappedPosition(
   movingPanel: FurniturePanel,
   proposedPosition: Vec3,
   otherPanels: FurniturePanel[],
-  snappingEnabled: boolean
+  snappingEnabled: boolean,
+  guides: GuideLine[] = []
 ): SnapResult {
   const [hx, hy, hz] = getWorldHalfExtents(movingPanel.dimensions, movingPanel.rotation)
   let x = proposedPosition[0]
@@ -100,15 +108,15 @@ export function computeSnappedPosition(
   if (!snappingEnabled) {
     return {
       position: [roundTo(x, 2), roundTo(y, 2), roundTo(z, 2)],
-      feedback: { x: false, y: false, z: false, floor: Math.abs(y - hy) < 0.01 },
+      feedback: { x: false, y: false, z: false, floor: Math.abs(y - hy) < 0.01, guide: false },
     }
   }
 
-  const feedback: SnapFeedback = { x: false, y: false, z: false, floor: false }
+  const feedback: SnapFeedback = { x: false, y: false, z: false, floor: false, guide: false }
   const proximityMargin = 15 // سم لاعتبار الألواح قريبة من بعضها في المحاور المتعامدة
   const otherBoxes = otherPanels.map(getPanelWorldBox)
 
-  // --- المحور Y (الأرضية أولاً ثم الألواح الأخرى) ---
+  // --- المحور Y (الأرضية + العلامات + الألواح الأخرى) ---
   let bestYDist = SNAP_THRESHOLD_CM
   let bestY = y
 
@@ -118,6 +126,27 @@ export function computeSnappedPosition(
     bestY = hy
     feedback.y = true
     feedback.floor = true
+  }
+
+  // علامات المحور Y
+  for (const g of guides) {
+    if (g.offsetAxis !== 'y') continue
+    const candidates = [
+      g.worldCoord + hy, // أسفل اللوح على العلام
+      g.worldCoord - hy, // أعلى اللوح على العلام
+      g.worldCoord, // منتصف اللوح على العلام
+    ]
+    for (const candidate of candidates) {
+      if (candidate < hy - 0.001) continue
+      const dist = Math.abs(y - candidate)
+      if (dist <= bestYDist) {
+        bestYDist = dist
+        bestY = candidate
+        feedback.y = true
+        feedback.floor = Math.abs(candidate - hy) < 0.01
+        feedback.guide = true
+      }
+    }
   }
 
   for (const ob of otherBoxes) {
@@ -141,6 +170,7 @@ export function computeSnappedPosition(
         bestY = candidate
         feedback.y = true
         feedback.floor = Math.abs(candidate - hy) < 0.01
+        feedback.guide = false
       }
     }
   }
@@ -148,9 +178,24 @@ export function computeSnappedPosition(
   y = feedback.y ? roundTo(bestY, 3) : snapToGridEdge(y, hy, GRID_STEP_CM)
   if (y < hy) y = hy
 
-  // --- المحور X ---
+  // --- المحور X (العلامات + الألواح الأخرى) ---
   let bestXDist = SNAP_THRESHOLD_CM
   let bestX = x
+  let snappedXToGuide = false
+
+  for (const g of guides) {
+    if (g.offsetAxis !== 'x') continue
+    const candidates = [g.worldCoord + hx, g.worldCoord - hx, g.worldCoord]
+    for (const candidate of candidates) {
+      const dist = Math.abs(x - candidate)
+      if (dist <= bestXDist) {
+        bestXDist = dist
+        bestX = candidate
+        feedback.x = true
+        snappedXToGuide = true
+      }
+    }
+  }
 
   for (const ob of otherBoxes) {
     const nearYZ =
@@ -159,11 +204,11 @@ export function computeSnappedPosition(
     if (!nearYZ) continue
 
     const candidates = [
-      ob.maxX + hx, // التصاق يسار اللوح المتحرك بيمين الآخر
-      ob.minX - hx, // التصاق يمين اللوح المتحرك بيسار الآخر
-      ob.minX + hx, // محاذاة الحافة اليسرى
-      ob.maxX - hx, // محاذاة الحافة اليمنى
-      ob.cx, // محاذاة المركز
+      ob.maxX + hx,
+      ob.minX - hx,
+      ob.minX + hx,
+      ob.maxX - hx,
+      ob.cx,
     ]
 
     for (const candidate of candidates) {
@@ -172,15 +217,32 @@ export function computeSnappedPosition(
         bestXDist = dist
         bestX = candidate
         feedback.x = true
+        snappedXToGuide = false
       }
     }
   }
 
+  if (snappedXToGuide) feedback.guide = true
   x = feedback.x ? roundTo(bestX, 3) : snapToGridEdge(x, hx, GRID_STEP_CM)
 
-  // --- المحور Z ---
+  // --- المحور Z (العلامات + الألواح الأخرى) ---
   let bestZDist = SNAP_THRESHOLD_CM
   let bestZ = z
+  let snappedZToGuide = false
+
+  for (const g of guides) {
+    if (g.offsetAxis !== 'z') continue
+    const candidates = [g.worldCoord + hz, g.worldCoord - hz, g.worldCoord]
+    for (const candidate of candidates) {
+      const dist = Math.abs(z - candidate)
+      if (dist <= bestZDist) {
+        bestZDist = dist
+        bestZ = candidate
+        feedback.z = true
+        snappedZToGuide = true
+      }
+    }
+  }
 
   for (const ob of otherBoxes) {
     const nearXY =
@@ -189,11 +251,11 @@ export function computeSnappedPosition(
     if (!nearXY) continue
 
     const candidates = [
-      ob.maxZ + hz, // التصاق خلف اللوح بأمام الآخر
-      ob.minZ - hz, // التصاق أمام اللوح بخلف الآخر
-      ob.minZ + hz, // محاذاة الحافة الخلفية
-      ob.maxZ - hz, // محاذاة الحافة الأمامية
-      ob.cz, // محاذاة المركز
+      ob.maxZ + hz,
+      ob.minZ - hz,
+      ob.minZ + hz,
+      ob.maxZ - hz,
+      ob.cz,
     ]
 
     for (const candidate of candidates) {
@@ -202,10 +264,12 @@ export function computeSnappedPosition(
         bestZDist = dist
         bestZ = candidate
         feedback.z = true
+        snappedZToGuide = false
       }
     }
   }
 
+  if (snappedZToGuide) feedback.guide = true
   z = feedback.z ? roundTo(bestZ, 3) : snapToGridEdge(z, hz, GRID_STEP_CM)
 
   return {

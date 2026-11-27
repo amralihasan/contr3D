@@ -4,6 +4,7 @@ import {
   Compass,
   DoorClosed,
   DoorOpen,
+  DraftingCompass,
   Eye,
   EyeOff,
   FolderOpen,
@@ -13,6 +14,7 @@ import {
   Ruler,
   Save,
   SlidersHorizontal,
+  Trash2,
   Undo2,
 } from 'lucide-react'
 import { useDesignStore } from '../../store/useDesignStore'
@@ -49,6 +51,13 @@ export function TopToolbar({
 
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
   const setSnappingEnabled = useDesignStore((s) => s.setSnappingEnabled)
+
+  const toolMode = useDesignStore((s) => s.toolMode)
+  const setToolMode = useDesignStore((s) => s.setToolMode)
+  const guidesCount = useDesignStore((s) => s.guides.length)
+  const guidesVisible = useDesignStore((s) => s.guidesVisible)
+  const toggleGuidesVisible = useDesignStore((s) => s.toggleGuidesVisible)
+  const clearAllGuides = useDesignStore((s) => s.clearAllGuides)
 
   const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
   const toggleInterfacesOpen = useDesignStore((s) => s.toggleInterfacesOpen)
@@ -97,7 +106,7 @@ export function TopToolbar({
         </div>
       </div>
 
-      {/* أزرار الكاميرا + أدوات المرحلة الثانية */}
+      {/* أزرار الكاميرا + المتر والعلام + أدوات المعاينة */}
       <div className="order-3 flex w-full flex-wrap items-center justify-center gap-1.5 pt-1 xl:order-2 xl:w-auto xl:pt-0">
         <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
           <span className="hidden items-center gap-1 px-2 text-xs text-slate-400 md:flex">
@@ -120,6 +129,51 @@ export function TopToolbar({
               </button>
             )
           })}
+        </div>
+
+        {/* زر أداة المتر / العلام + أزرار إدارة العلامات */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setToolMode(toolMode === 'tape' ? 'select' : 'tape')}
+            className={`flex h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition ${
+              toolMode === 'tape'
+                ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-400/40'
+                : 'border-slate-700 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
+            }`}
+            title="أداة المتر والخطوط الإرشادية (وضع العلام والقياس)"
+          >
+            <Ruler className="h-4 w-4 text-cyan-300" />
+            <span>المتر / العلام</span>
+          </button>
+
+          {guidesCount > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={toggleGuidesVisible}
+                className={`flex h-11 items-center gap-1 rounded-xl border px-2.5 text-xs font-bold transition ${
+                  guidesVisible
+                    ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-200'
+                    : 'border-slate-700 bg-slate-800/80 text-slate-400'
+                }`}
+                title={guidesVisible ? 'إخفاء العلامات مؤقتاً' : 'إظهار العلامات'}
+              >
+                {guidesVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                <span className="tabular-nums">{guidesCount}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={clearAllGuides}
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+                title="مسح كل العلامات"
+                aria-label="مسح كل العلامات"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
 
         {/* فتح / إغلاق الضلف والأدراج */}
@@ -175,7 +229,7 @@ export function TopToolbar({
           }`}
           title="إظهار أو إخفاء خطوط المقاسات ثلاثية الأبعاد"
         >
-          <Ruler className="h-4 w-4" />
+          <DraftingCompass className="h-4 w-4" />
           <span className="hidden sm:inline">المقاسات</span>
         </button>
 
@@ -188,7 +242,7 @@ export function TopToolbar({
               ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300'
               : 'border-slate-700 bg-slate-800/80 text-slate-400 hover:text-slate-200'
           }`}
-          title="تفعيل أو إيقاف المغناطيس الذكي (0.5 سم + التصاق بالأسطح)"
+          title="تفعيل أو إيقاف المغناطيس الذكي (0.5 سم + الالتصاق بالأسطح والعلامات)"
         >
           <Magnet className="h-4 w-4" />
           <span className="hidden sm:inline">المغناطيس</span>

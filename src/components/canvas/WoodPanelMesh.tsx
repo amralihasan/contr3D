@@ -82,6 +82,7 @@ export function WoodPanelMesh({ panel, isSelected, registerObject }: WoodPanelMe
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
+    if (useDesignStore.getState().toolMode === 'tape') return
     selectPanel(panel.id, e.shiftKey || e.ctrlKey || e.metaKey)
   }
 

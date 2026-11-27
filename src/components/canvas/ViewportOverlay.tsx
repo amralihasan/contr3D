@@ -41,9 +41,23 @@ export function ViewportOverlay() {
         )}
 
         {isDraggingGizmo && snappingEnabled && activeSnapAxes.length > 0 && (
-          <div className="flex items-center gap-1.5 rounded-xl border border-emerald-500/60 bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-200 backdrop-blur-md">
-            <Magnet className="h-3.5 w-3.5 text-emerald-300" />
-            <span>التصاق ذكي ({activeSnapAxes.join(' · ')})</span>
+          <div
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold backdrop-blur-md ${
+              snapFeedback.guide
+                ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-100'
+                : 'border-emerald-500/60 bg-emerald-500/20 text-emerald-200'
+            }`}
+          >
+            <Magnet
+              className={`h-3.5 w-3.5 ${
+                snapFeedback.guide ? 'text-cyan-300' : 'text-emerald-300'
+              }`}
+            />
+            <span>
+              {snapFeedback.guide
+                ? `التصاق بالعلام (${activeSnapAxes.join(' · ')})`
+                : `التصاق ذكي (${activeSnapAxes.join(' · ')})`}
+            </span>
           </div>
         )}
 
