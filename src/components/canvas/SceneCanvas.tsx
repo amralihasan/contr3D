@@ -13,7 +13,6 @@ import { GuideLines3D } from './GuideLines3D'
 import { HumanReference } from './HumanReference'
 import { PanelResizeHandles } from './PanelResizeHandles'
 import { PanelTransformGizmo } from './PanelTransformGizmo'
-import { SelectedDimensionTip } from './SelectedDimensionTip'
 import { TapeMeasureTool, type TapePanelHandlers } from './TapeMeasureTool'
 import { WoodPanelMesh } from './WoodPanelMesh'
 import { WorkspaceGrid } from './WorkspaceGrid'
@@ -375,7 +374,6 @@ export function SceneCanvas() {
         <PanelResizeHandles selectedObject={selectedObject} />
         <ExportCaptureController />
       </Canvas>
-      <SelectedDimensionTip />
     </div>
   )
 }

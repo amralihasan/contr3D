@@ -1,7 +1,14 @@
 import { Compass, Magnet } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { CameraPreset } from '../../types/furniture'
+import {
+  isInterfaceRole,
+  isLegOrBaseRole,
+  type CameraPreset,
+  type FurniturePanel,
+} from '../../types/furniture'
+import { computeOverallDimensions } from '../../utils/dimensions'
+import { roundTo } from '../../utils/snapping'
 
 const CAMERA_BUTTONS: { preset: CameraPreset; label: string }[] = [
   { preset: 'perspective', label: '3D' },
@@ -10,10 +17,33 @@ const CAMERA_BUTTONS: { preset: CameraPreset; label: string }[] = [
   { preset: 'top', label: 'علوي' },
 ]
 
+function formatCmValue(value: number): string {
+  return String(roundTo(value, 1))
+}
+
+function formatSinglePanelDimensions(panel: FurniturePanel): string {
+  const { width, height, depth } = panel.dimensions
+  if (isLegOrBaseRole(panel.role) || panel.role === 'drawer') {
+    return `عرض ${formatCmValue(width)} × ارتفاع ${formatCmValue(height)} × عمق ${formatCmValue(depth)} سم`
+  }
+
+  switch (panel.thicknessAxis) {
+    case 'y':
+      return `عرض ${formatCmValue(width)} × عمق ${formatCmValue(depth)} × سُمك ${formatCmValue(height)} سم`
+    case 'x':
+      return `عمق ${formatCmValue(depth)} × ارتفاع ${formatCmValue(height)} × سُمك ${formatCmValue(width)} سم`
+    case 'z':
+    default:
+      return `عرض ${formatCmValue(width)} × ارتفاع ${formatCmValue(height)} × سُمك ${formatCmValue(depth)} سم`
+  }
+}
+
 export function ViewportOverlay() {
   const panels = useDesignStore((s) => s.panels)
-  const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
+  const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
+  const isExporting = useDesignStore((s) => s.isExporting)
+  const liveResizePreview = useDesignStore((s) => s.liveResizePreview)
   const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const snapFeedback = useDesignStore((s) => s.snapFeedback)
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
@@ -29,9 +59,41 @@ export function ViewportOverlay() {
     return () => clearTimeout(timer)
   }, [statusToast, clearStatusToast])
 
-  const isExporting = useDesignStore((s) => s.isExporting)
-  const hasVisibleSelectionTip = !isExporting && selectedPanelIds.length > 0
-  const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
+  const selectionSummary = useMemo(() => {
+    if (isExporting || selectedPanelIds.length === 0) return null
+
+    const selectedSet = new Set(selectedPanelIds)
+    const selectedPanels: FurniturePanel[] = []
+
+    for (const panel of panels) {
+      if (!selectedSet.has(panel.id)) continue
+      if (interfacesHidden && isInterfaceRole(panel.role)) continue
+      if (liveResizePreview && liveResizePreview.id === panel.id) {
+        selectedPanels.push({
+          ...panel,
+          dimensions: liveResizePreview.dimensions,
+          position: liveResizePreview.position,
+        })
+      } else {
+        selectedPanels.push(panel)
+      }
+    }
+
+    if (selectedPanels.length === 0) return null
+
+    if (selectedPanels.length === 1) {
+      const single = selectedPanels[0]
+      return `${single.name}: ${formatSinglePanelDimensions(single)}`
+    }
+
+    const overall = computeOverallDimensions(selectedPanels)
+    if (!overall) {
+      return `${selectedPanels.length} قطع محددة`
+    }
+
+    return `${selectedPanels.length} قطع محددة — ${formatCmValue(overall.width)} × ${formatCmValue(overall.height)} × ${formatCmValue(overall.depth)} سم`
+  }, [panels, selectedPanelIds, interfacesHidden, isExporting, liveResizePreview])
+
   const activeSnapAxes = [
     snapFeedback.x ? 'X' : null,
     snapFeedback.y ? (snapFeedback.floor ? 'الأرضية' : 'Y') : null,
@@ -41,11 +103,7 @@ export function ViewportOverlay() {
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-wrap items-start justify-between gap-2">
       {/* مقياس الشبكة + حالة الالتصاق */}
-      <div
-        className={`flex flex-col items-start gap-1.5 transition-[margin] duration-150 ${
-          hasVisibleSelectionTip ? 'mt-14' : ''
-        }`}
-      >
+      <div className="flex flex-col items-start gap-1.5">
         <div className="rounded-xl border border-slate-700/60 bg-slate-900/75 px-2.5 py-1 text-[11px] font-semibold text-slate-300 backdrop-blur-md">
           المربع = 10 سم · الخطوة = 0.5 سم
         </div>
@@ -104,17 +162,10 @@ export function ViewportOverlay() {
           </div>
         )}
 
-        {selectedPanelIds.length > 1 ? (
-          <div className="rounded-xl border border-amber-500/40 bg-slate-900/85 px-2.5 py-1 text-[11px] font-bold text-amber-200 backdrop-blur-md">
-            تم تحديد {selectedPanelIds.length} قطع (جاهز للتوزيع المتساوي)
+        {selectionSummary && (
+          <div className="select-none tabular-nums rounded-xl border border-amber-500/40 bg-slate-900/85 px-2.5 py-1 text-[11px] font-bold text-amber-200 backdrop-blur-md">
+            {selectionSummary}
           </div>
-        ) : (
-          selectedPanel && (
-            <div className="tabular-nums rounded-xl border border-amber-500/40 bg-slate-900/85 px-2.5 py-1 text-[11px] font-bold text-amber-200 backdrop-blur-md">
-              {selectedPanel.name}: {selectedPanel.dimensions.width} ×{' '}
-              {selectedPanel.dimensions.height} × {selectedPanel.dimensions.depth} سم
-            </div>
-          )
         )}
       </div>
     </div>
