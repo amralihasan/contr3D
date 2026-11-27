@@ -4,12 +4,17 @@ import { memo, useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import { MATERIALS } from '../../constants/materials'
 import { useDesignStore } from '../../store/useDesignStore'
-import { getEffectivePanelHandle, type FurniturePanel } from '../../types/furniture'
+import {
+  getEffectivePanelHandle,
+  isLegOrBaseRole,
+  type FurniturePanel,
+} from '../../types/furniture'
 import {
   buildExtrudedPanelGeometry,
   hasCustomPanelGeometry,
 } from '../../utils/panelGeometry'
 import { getWoodTexture } from '../../utils/woodTextures'
+import { FurnitureBaseMesh } from './FurnitureBaseMesh'
 import { PanelHandle } from './PanelHandle'
 import type { TapePanelHandlers } from './TapeMeasureTool'
 
@@ -68,9 +73,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const useCustomExtrude =
     hasCustomPanelGeometry(panel) &&
     panel.role !== 'drawer' &&
-    panel.role !== 'plinth_base' &&
-    panel.role !== 'wood_legs' &&
-    panel.role !== 'metal_legs'
+    !isLegOrBaseRole(panel.role)
 
   const customGeometry = useMemo(() => {
     if (!useCustomExtrude) return null
@@ -186,12 +189,18 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     vertical: 3,
     divider: 4,
     plinth_base: 5,
+    plinth_recessed: 5,
     hinged_door: 6,
     sliding_door: 7,
     drawer: 8,
     back: 9,
     wood_legs: 10,
+    wood_pillars: 10,
+    wood_arch: 10,
     metal_legs: 11,
+    metal_frame: 11,
+    metal_u_legs: 11,
+    metal_x_legs: 11,
     custom: 2,
   }
   const polyOffset = polyOffsetByRole[panel.role] ?? 1
@@ -418,188 +427,28 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       )
     }
 
-    // 4. سوكلة / وزرة كونتر
-    if (panel.role === 'plinth_base') {
-      const wall = Math.min(1.8, width / 4, depth / 4)
-      const innerW = Math.max(1, width - wall * 2)
+    // 4. جميع القواعد والرجول (سوكلة، رجول خشب/معدن، شاسيهات معدن، أعمدة، أرش)
+    if (isLegOrBaseRole(panel.role)) {
       return (
-        <group>
-          {/* واجهة أمامية وخلفية */}
-          <mesh position={[0, 0, depth / 2 - wall / 2]} castShadow receiveShadow onClick={handleClick}>
-            <boxGeometry args={[width, height, wall]} />
-            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
-            <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
-          </mesh>
-          <mesh position={[0, 0, -depth / 2 + wall / 2]} castShadow receiveShadow onClick={handleClick}>
-            <boxGeometry args={[width, height, wall]} />
-            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
-            <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
-          </mesh>
-          {/* جوانب السوكلة */}
-          <mesh position={[-width / 2 + wall / 2, 0, 0]} castShadow receiveShadow onClick={handleClick}>
-            <boxGeometry args={[wall, height, Math.max(1, depth - wall * 2)]} />
-            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
-            <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
-          </mesh>
-          <mesh position={[width / 2 - wall / 2, 0, 0]} castShadow receiveShadow onClick={handleClick}>
-            <boxGeometry args={[wall, height, Math.max(1, depth - wall * 2)]} />
-            <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
-            <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
-          </mesh>
-          {/* إطار تحديد خفيف للمساحة الكلية عند الاختيار */}
-          {isSelected && innerW > 0 && (
-            <mesh onClick={handleClick}>
-              <boxGeometry args={[width, height, depth]} />
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-              <Edges color="#fbbf24" lineWidth={2.2} />
-            </mesh>
-          )}
-        </group>
+        <FurnitureBaseMesh
+          panel={panel}
+          woodColor={texture ? '#ffffff' : matSpec.color}
+          woodMap={texture ?? null}
+          woodRoughness={matSpec.roughness}
+          woodMetalness={matSpec.metalness}
+          materialKey={materialKey}
+          polyOffset={polyOffset}
+          isSelected={isSelected}
+          isSketch={isSketch}
+          edgeColor={edgeColor}
+          edgeWidth={edgeWidth}
+          edgeOpacity={edgeOpacity}
+          onClick={handleClick}
+        />
       )
     }
 
-    // 5. طقم 4 رجول خشب مايلة
-    if (panel.role === 'wood_legs') {
-      const legRadiusTop = Math.min(2.2, width * 0.04, depth * 0.08)
-      const legRadiusBot = legRadiusTop * 0.65
-      const plateH = Math.min(0.6, height * 0.1)
-      const legH = Math.max(2, height - plateH)
-      const insetX = Math.max(2, width / 2 - 4)
-      const insetZ = Math.max(2, depth / 2 - 4)
-
-      const corners: [number, number, number, number][] = [
-        [-insetX, -insetZ, -1, -1],
-        [insetX, -insetZ, 1, -1],
-        [-insetX, insetZ, -1, 1],
-        [insetX, insetZ, 1, 1],
-      ]
-
-      return (
-        <group>
-          {corners.map(([cx, cz, sx, sz], idx) => (
-            <group key={idx} position={[cx, 0, cz]}>
-              {/* قاعدة تثبيت علوية */}
-              <mesh
-                position={[0, height / 2 - plateH / 2, 0]}
-                castShadow
-                receiveShadow
-                onClick={handleClick}
-              >
-                <boxGeometry args={[5, plateH, 5]} />
-                <meshStandardMaterial
-                  color={isSketch ? '#f8fafc' : '#334155'}
-                  metalness={isSketch ? 0 : 0.5}
-                  roughness={isSketch ? 0.9 : 0.45}
-                />
-                {sketchSubEdges}
-              </mesh>
-              {/* الرجل الخشبية المايلة */}
-              <mesh
-                position={[sx * 0.8, -plateH / 2, sz * 0.8]}
-                rotation={[-sz * 0.11, 0, sx * 0.11]}
-                castShadow
-                receiveShadow
-                onClick={handleClick}
-              >
-                <cylinderGeometry args={[legRadiusTop, legRadiusBot, legH, 16]} />
-                <meshStandardMaterial key={materialKey} {...mainMaterialProps} />
-                {sketchSubEdges}
-              </mesh>
-            </group>
-          ))}
-          {isSelected && (
-            <mesh onClick={handleClick}>
-              <boxGeometry args={[width, height, depth]} />
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-              <Edges color="#fbbf24" lineWidth={2} />
-            </mesh>
-          )}
-        </group>
-      )
-    }
-
-    // 6. طقم 4 رجول معدن مستقيمة
-    if (panel.role === 'metal_legs') {
-      const postSize = Math.min(3.2, width * 0.05, depth * 0.1)
-      const plateH = Math.min(0.5, height * 0.1)
-      const glideH = Math.min(0.5, height * 0.1)
-      const postH = Math.max(2, height - plateH - glideH)
-      const insetX = Math.max(1.5, width / 2 - postSize / 2 - 1)
-      const insetZ = Math.max(1.5, depth / 2 - postSize / 2 - 1)
-
-      const corners: [number, number][] = [
-        [-insetX, -insetZ],
-        [insetX, -insetZ],
-        [-insetX, insetZ],
-        [insetX, insetZ],
-      ]
-
-      return (
-        <group>
-          {corners.map(([cx, cz], idx) => (
-            <group key={idx} position={[cx, 0, cz]}>
-              {/* قاعدة تثبيت علوية */}
-              <mesh
-                position={[0, height / 2 - plateH / 2, 0]}
-                castShadow
-                receiveShadow
-                onClick={handleClick}
-              >
-                <boxGeometry args={[postSize + 2, plateH, postSize + 2]} />
-                <meshStandardMaterial
-                  color={isSketch ? '#f8fafc' : '#334155'}
-                  metalness={isSketch ? 0 : 0.8}
-                  roughness={isSketch ? 0.9 : 0.3}
-                />
-                {sketchSubEdges}
-              </mesh>
-              {/* عمود الرجل المعدني */}
-              <mesh
-                position={[0, (glideH - plateH) / 2, 0]}
-                castShadow
-                receiveShadow
-                onClick={handleClick}
-              >
-                <boxGeometry args={[postSize, postH, postSize]} />
-                <meshStandardMaterial
-                  key={isSketch ? 'sketch-metal' : panel.materialId}
-                  color={isSketch ? '#f8fafc' : matSpec.color}
-                  metalness={isSketch ? 0 : 0.75}
-                  roughness={isSketch ? 0.9 : 0.32}
-                  polygonOffset
-                  polygonOffsetFactor={polyOffset}
-                  polygonOffsetUnits={polyOffset}
-                />
-                <Edges threshold={15} color={edgeColor} lineWidth={edgeWidth} transparent opacity={edgeOpacity} />
-              </mesh>
-              {/* كعب أرضي */}
-              <mesh
-                position={[0, -height / 2 + glideH / 2, 0]}
-                castShadow
-                receiveShadow
-                onClick={handleClick}
-              >
-                <cylinderGeometry args={[postSize * 0.55, postSize * 0.6, glideH, 12]} />
-                <meshStandardMaterial
-                  color={isSketch ? '#f8fafc' : '#0f172a'}
-                  roughness={isSketch ? 0.9 : 0.8}
-                />
-                {sketchSubEdges}
-              </mesh>
-            </group>
-          ))}
-          {isSelected && (
-            <mesh onClick={handleClick}>
-              <boxGeometry args={[width, height, depth]} />
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-              <Edges color="#fbbf24" lineWidth={2} />
-            </mesh>
-          )}
-        </group>
-      )
-    }
-
-    // 7. لوح كونتر عادي (أو بأطراف مدورة / فتحات أسلاك عبر ExtrudeGeometry)
+    // 5. لوح كونتر عادي (أو بأطراف مدورة / فتحات أسلاك عبر ExtrudeGeometry)
     return (
       <mesh
         geometry={customGeometry ?? undefined}

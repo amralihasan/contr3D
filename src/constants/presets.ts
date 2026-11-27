@@ -3,6 +3,7 @@ import type {
   CameraPreset,
   HingeSide,
   MaterialId,
+  MetalBaseColor,
   PanelCategory,
   PanelDimensions,
   PanelRole,
@@ -31,6 +32,7 @@ export interface PanelPreset {
   clearanceCm?: number
   hasHandle?: boolean
   hingeSide?: HingeSide
+  metalColor?: MetalBaseColor
 }
 
 export const PANEL_PRESETS: PanelPreset[] = [
@@ -163,6 +165,76 @@ export const BASE_PRESETS: PanelPreset[] = [
     thicknessAxis: 'y',
     defaultMaterial: 'black',
     defaultPosition: [0, 7.5, 0],
+    metalColor: 'matte_black',
+  },
+  {
+    role: 'plinth_recessed',
+    category: 'base',
+    label: 'سوكلة خشب غاطسة للدواليب',
+    shortLabel: 'سوكلة غاطسة',
+    subtitle: '100 × 36 سم · ارتفاع 10 سم (كونتر 18 مم)',
+    dimensions: { width: 100, height: 10, depth: 36 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'light_oak',
+    defaultPosition: [0, 5, -1],
+  },
+  {
+    role: 'metal_frame',
+    category: 'base',
+    label: 'شاسيه معدن مستطيل',
+    shortLabel: 'شاسيه معدن',
+    subtitle: '120 × 38 سم · ارتفاع 18 سم (2.5×2.5 سم)',
+    dimensions: { width: 120, height: 18, depth: 38 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'black',
+    defaultPosition: [0, 9, 0],
+    metalColor: 'matte_black',
+  },
+  {
+    role: 'metal_u_legs',
+    category: 'base',
+    label: 'رجول معدن حرف U',
+    shortLabel: 'رجول معدن U',
+    subtitle: '110 × 55 سم · ارتفاع 40 سم (مربع مغلق)',
+    dimensions: { width: 110, height: 40, depth: 55 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'black',
+    defaultPosition: [0, 20, 0],
+    metalColor: 'matte_black',
+  },
+  {
+    role: 'metal_x_legs',
+    category: 'base',
+    label: 'قاعدة معدن حرف X',
+    shortLabel: 'قاعدة معدن X',
+    subtitle: '120 × 60 سم · ارتفاع 73 سم (بعارضة ربط)',
+    dimensions: { width: 120, height: 73, depth: 60 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'black',
+    defaultPosition: [0, 36.5, 0],
+    metalColor: 'matte_black',
+  },
+  {
+    role: 'wood_pillars',
+    category: 'base',
+    label: 'قاعدة أعمدة أسطوانية مودرن',
+    shortLabel: 'أعمدة خشب',
+    subtitle: '100 × 40 سم · ارتفاع 40 سم',
+    dimensions: { width: 100, height: 40, depth: 40 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'light_oak',
+    defaultPosition: [0, 20, 0],
+  },
+  {
+    role: 'wood_arch',
+    category: 'base',
+    label: 'قاعدة خشب مقوّسة (أرش)',
+    shortLabel: 'قاعدة أرش',
+    subtitle: '100 × 45 سم · ارتفاع 40 سم (سُمك 3.6 سم)',
+    dimensions: { width: 100, height: 40, depth: 45 },
+    thicknessAxis: 'x',
+    defaultMaterial: 'light_oak',
+    defaultPosition: [0, 20, 0],
   },
 ]
 

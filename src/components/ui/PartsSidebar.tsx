@@ -56,8 +56,14 @@ function getPresetIcon(role: Exclude<PanelRole, 'custom'>) {
     case 'drawer':
       return <PanelBottom className="h-5 w-5 text-sky-300" />
     case 'plinth_base':
+    case 'plinth_recessed':
     case 'wood_legs':
     case 'metal_legs':
+    case 'metal_frame':
+    case 'metal_u_legs':
+    case 'metal_x_legs':
+    case 'wood_pillars':
+    case 'wood_arch':
       return <Footprints className="h-5 w-5 text-emerald-300" />
   }
 }

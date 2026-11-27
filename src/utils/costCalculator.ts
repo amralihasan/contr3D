@@ -81,7 +81,14 @@ export function computeCostEstimate(
     } else if (panel.role === 'drawer') {
       drawerCount += 1
       if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
-    } else if (panel.role === 'wood_legs' || panel.role === 'metal_legs') {
+    } else if (
+      panel.role === 'wood_legs' ||
+      panel.role === 'metal_legs' ||
+      panel.role === 'metal_frame' ||
+      panel.role === 'metal_u_legs' ||
+      panel.role === 'metal_x_legs' ||
+      panel.role === 'wood_pillars'
+    ) {
       legsSetCount += 1
     }
   }
@@ -152,8 +159,8 @@ export function computeCostEstimate(
     },
     {
       key: 'legs',
-      label: 'أطقم رجول (خشب / معدن)',
-      note: 'كل طقم = 4 رجول كاملة',
+      label: 'قواعد وأطقم رجول (معدن / خشب)',
+      note: 'تشمل أطقم الرجول والشاسيهات المعدنية والأعمدة',
       quantity: legsSetCount,
       unitLabel: 'طقم',
       unitPrice: pricing.legsSetPrice,

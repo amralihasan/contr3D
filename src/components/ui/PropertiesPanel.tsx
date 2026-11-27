@@ -28,12 +28,14 @@ import {
   getEffectivePanelHandle,
   isInterfaceRole,
   isLegOrBaseRole,
+  isMetalBaseRole,
   type Axis,
   type CornerRadius,
   type EdgeSide,
   type HandleColor,
   type HandlePosition,
   type HandleType,
+  type MetalBaseColor,
   type PanelDimensions,
 } from '../../types/furniture'
 import { getMaxCornerRadius, getPanelFaceSize } from '../../utils/panelGeometry'
@@ -189,6 +191,13 @@ const HANDLE_COLOR_OPTIONS: { color: HandleColor; label: string; swatch: string 
 
 const HANDLE_LENGTH_PRESETS = [12, 16, 20, 32] as const
 
+const METAL_COLOR_OPTIONS: { color: MetalBaseColor; label: string; swatch: string }[] = [
+  { color: 'matte_black', label: 'أسود مط', swatch: '#18181b' },
+  { color: 'gold', label: 'ذهبي', swatch: '#d4af37' },
+  { color: 'matte_white', label: 'أبيض مط', swatch: '#f8fafc' },
+  { color: 'anthracite', label: 'رمادي أنثراسيت', swatch: '#334155' },
+]
+
 export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const panels = useDesignStore((s) => s.panels)
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
@@ -210,6 +219,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const removePanelCutout = useDesignStore((s) => s.removePanelCutout)
   const rotatePanel90 = useDesignStore((s) => s.rotatePanel90)
   const setPanelMaterial = useDesignStore((s) => s.setPanelMaterial)
+  const setPanelMetalColor = useDesignStore((s) => s.setPanelMetalColor)
   const duplicatePanel = useDesignStore((s) => s.duplicatePanel)
   const deletePanel = useDesignStore((s) => s.deletePanel)
 
@@ -356,7 +366,12 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const currentThickness = panel.dimensions[axisToDimKey[panel.thicknessAxis]]
   const isFront = isInterfaceRole(panel.role)
   const isBaseOrLeg = isLegOrBaseRole(panel.role)
-  const isHardwareLegs = panel.role === 'wood_legs' || panel.role === 'metal_legs'
+  const isMetalBase = isMetalBaseRole(panel.role)
+  const supportsEdgeBanding =
+    !isBaseOrLeg ||
+    panel.role === 'plinth_base' ||
+    panel.role === 'plinth_recessed' ||
+    panel.role === 'wood_arch'
   const supportsShapeAndCutouts =
     !isBaseOrLeg && panel.role !== 'drawer'
   const clearance = panel.clearanceCm ?? 0.2
@@ -453,7 +468,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
 
             {isBaseOrLeg && (
               <div className="grid grid-cols-4 gap-1">
-                {[8, 10, 15, 20].map((h) => {
+                {[10, 18, 40, 73].map((h) => {
                   const active = Math.abs(panel.dimensions.height - h) < 0.05
                   return (
                     <button
@@ -735,42 +750,78 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
         )}
 
         {/* 2. اللون والخامة (مفتوح افتراضياً) */}
-        <AccordionSection title="اللون والخامة" defaultOpen>
-          <div className="grid grid-cols-1 gap-1.5">
-            {MATERIAL_LIST.map((mat) => {
-              const active = panel.materialId === mat.id
-              return (
-                <button
-                  key={mat.id}
-                  type="button"
-                  onClick={() => setPanelMaterial(panel.id, mat.id)}
-                  className={`flex h-9 items-center justify-between rounded-xl border px-2.5 transition ${
-                    active
-                      ? 'border-amber-500 bg-amber-500/15 text-amber-100'
-                      : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800/70'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-5 w-5 rounded-md shadow-inner ring-1 ring-white/20"
-                      style={{
-                        backgroundColor: mat.swatch,
-                        backgroundImage: mat.hasWoodGrain
-                          ? 'repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 2px, transparent 2px, transparent 6px)'
-                          : undefined,
-                      }}
-                    />
-                    <span className="text-xs font-bold">{mat.label}</span>
-                  </div>
-                  {active && (
-                    <span className="rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
-                      مختار
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
+        <AccordionSection
+          title={isMetalBase ? 'لون المعدن' : 'اللون والخامة'}
+          defaultOpen
+        >
+          {isMetalBase ? (
+            <div className="grid grid-cols-1 gap-1.5">
+              {METAL_COLOR_OPTIONS.map((opt) => {
+                const active = (panel.metalColor ?? 'matte_black') === opt.color
+                return (
+                  <button
+                    key={opt.color}
+                    type="button"
+                    onClick={() => setPanelMetalColor(panel.id, opt.color)}
+                    className={`flex h-9 items-center justify-between rounded-xl border px-2.5 transition ${
+                      active
+                        ? 'border-amber-500 bg-amber-500/15 text-amber-100'
+                        : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-5 w-5 rounded-md shadow-inner ring-1 ring-white/25"
+                        style={{ backgroundColor: opt.swatch }}
+                      />
+                      <span className="text-xs font-bold">{opt.label}</span>
+                    </div>
+                    {active && (
+                      <span className="rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
+                        مختار
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5">
+              {MATERIAL_LIST.map((mat) => {
+                const active = panel.materialId === mat.id
+                return (
+                  <button
+                    key={mat.id}
+                    type="button"
+                    onClick={() => setPanelMaterial(panel.id, mat.id)}
+                    className={`flex h-9 items-center justify-between rounded-xl border px-2.5 transition ${
+                      active
+                        ? 'border-amber-500 bg-amber-500/15 text-amber-100'
+                        : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-5 w-5 rounded-md shadow-inner ring-1 ring-white/20"
+                        style={{
+                          backgroundColor: mat.swatch,
+                          backgroundImage: mat.hasWoodGrain
+                            ? 'repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 2px, transparent 2px, transparent 6px)'
+                            : undefined,
+                        }}
+                      />
+                      <span className="text-xs font-bold">{mat.label}</span>
+                    </div>
+                    {active && (
+                      <span className="rounded-md bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-slate-950">
+                        مختار
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </AccordionSection>
 
         {/* 3. التدوير السريع (قابل للطي) */}
@@ -795,7 +846,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
         </AccordionSection>
 
         {/* 4. شريط الحرف (مطوي افتراضياً) */}
-        {!isHardwareLegs && (
+        {supportsEdgeBanding && (
           <AccordionSection
             title="شريط الحرف (Edge Banding)"
             badge={`${activeEdgesCount} حروف`}

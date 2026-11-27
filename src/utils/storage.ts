@@ -11,6 +11,7 @@ import {
   type HandlePosition,
   type HandleType,
   type MaterialId,
+  type MetalBaseColor,
   type PanelCategory,
   type PanelCutout,
   type PanelHandleConfig,
@@ -221,6 +222,14 @@ export function sanitizePanel(raw: unknown): FurniturePanel | null {
   }
   if (obj.hingeSide === 'left' || obj.hingeSide === 'right') {
     panel.hingeSide = obj.hingeSide
+  }
+  if (
+    obj.metalColor === 'matte_black' ||
+    obj.metalColor === 'gold' ||
+    obj.metalColor === 'matte_white' ||
+    obj.metalColor === 'anthracite'
+  ) {
+    panel.metalColor = obj.metalColor as MetalBaseColor
   }
   const cornerRadius = sanitizeCornerRadius(obj.cornerRadius)
   if (cornerRadius) panel.cornerRadius = cornerRadius

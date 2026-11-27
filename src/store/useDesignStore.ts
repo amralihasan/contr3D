@@ -24,6 +24,7 @@ import {
   type HingeSide,
   type HumanScalePreset,
   type MaterialId,
+  type MetalBaseColor,
   type PanelCutout,
   type PanelDimensions,
   type PanelHandleConfig,
@@ -302,6 +303,7 @@ interface DesignState {
   removePanelCutout: (id: string, cutoutId: string) => void
   rotatePanel90: (id: string, axis: Axis) => void
   setPanelMaterial: (id: string, materialId: MaterialId) => void
+  setPanelMetalColor: (id: string, metalColor: MetalBaseColor) => void
   renamePanel: (id: string, name: string) => void
 
   // Auto-distribute shelves/dividers
@@ -868,6 +870,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
         ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
         ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
         ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
+        ...(preset.metalColor !== undefined ? { metalColor: preset.metalColor } : {}),
       })
     }
 
@@ -1423,6 +1426,21 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     if (!target || target.materialId === materialId) return
 
     const nextPanels = panels.map((p) => (p.id === id ? { ...p, materialId } : p))
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  setPanelMetalColor: (id, metalColor) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target || target.metalColor === metalColor) return
+
+    const nextPanels = panels.map((p) => (p.id === id ? { ...p, metalColor } : p))
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 
     set({

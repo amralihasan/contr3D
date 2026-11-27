@@ -7,6 +7,7 @@ import {
   type HandleColor,
   type HandleType,
   type MaterialId,
+  type MetalBaseColor,
   type PanelHandleConfig,
   type PanelRole,
 } from '../types/furniture'
@@ -77,9 +78,22 @@ const ROLE_LABELS: Record<PanelRole, string> = {
   sliding_door: 'ضلفة جرار',
   drawer: 'درج',
   plinth_base: 'وزرة / سوكلة',
+  plinth_recessed: 'سوكلة خشب غاطسة',
   wood_legs: 'طقم 4 رجول خشب مايلة',
   metal_legs: 'طقم 4 رجول معدن مستقيمة',
+  metal_frame: 'شاسيه معدن مستطيل',
+  metal_u_legs: 'رجول معدن حرف U',
+  metal_x_legs: 'قاعدة معدن حرف X',
+  wood_pillars: 'قاعدة أعمدة أسطوانية خشب',
+  wood_arch: 'قاعدة خشب مقوّسة (أرش)',
   custom: 'لوح مخصص',
+}
+
+const METAL_COLOR_LABELS: Record<MetalBaseColor, string> = {
+  matte_black: 'أسود مط',
+  gold: 'ذهبي',
+  matte_white: 'أبيض مط',
+  anthracite: 'رمادي أنثراسيت',
 }
 
 const HANDLE_TYPE_LABELS: Record<HandleType, string> = {
@@ -197,11 +211,25 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
   for (const panel of panels) {
     const eb = getEffectiveEdgeBanding(panel)
 
-    // 1. الرجول الجاهزة: إكسسوارات وليست تقطيع ألواح كونتر
-    if (panel.role === 'wood_legs' || panel.role === 'metal_legs') {
-      const matLabel = MATERIALS[panel.materialId].label
-      const dimLabel = `${panel.dimensions.width} × ${panel.dimensions.depth} · ارتفاع ${panel.dimensions.height} سم`
-      const hwKey = `${panel.role}|${dimLabel}|${panel.materialId}`
+    // 1. الرجول والشاسيهات المعدنية والأعمدة الجاهزة: إكسسوارات وليست تقطيع ألواح كونتر
+    if (
+      panel.role === 'wood_legs' ||
+      panel.role === 'metal_legs' ||
+      panel.role === 'metal_frame' ||
+      panel.role === 'metal_u_legs' ||
+      panel.role === 'metal_x_legs' ||
+      panel.role === 'wood_pillars'
+    ) {
+      const isMetal =
+        panel.role === 'metal_legs' ||
+        panel.role === 'metal_frame' ||
+        panel.role === 'metal_u_legs' ||
+        panel.role === 'metal_x_legs'
+      const matLabel = isMetal
+        ? METAL_COLOR_LABELS[panel.metalColor ?? 'matte_black']
+        : MATERIALS[panel.materialId].label
+      const dimLabel = `${panel.dimensions.width} × ${panel.dimensions.height} × ${panel.dimensions.depth} سم`
+      const hwKey = `${panel.role}|${dimLabel}|${matLabel}`
       const existing = hardwareMap.get(hwKey)
       if (existing) {
         existing.quantity += 1
@@ -213,6 +241,32 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
           materialLabel: matLabel,
           quantity: 1,
         })
+      }
+      continue
+    }
+
+    // 1ب. القاعدة الخشب المقوّسة (أرش 3.6 سم = قائمتين كل منهما طبقتين 1.8 سم)
+    if (panel.role === 'wood_arch') {
+      const lenCm = roundTo(Math.max(panel.dimensions.depth, panel.dimensions.height), 2)
+      const widCm = roundTo(Math.min(panel.dimensions.depth, panel.dimensions.height), 2)
+      const archNote = 'قص قوس أرش (تدبيل طبقتين 1.8 سم = 3.6 سم)'
+      for (const side of ['يسار', 'يمين']) {
+        for (let layer = 1; layer <= 2; layer += 1) {
+          pieces.push({
+            id: `${panel.id}_${side}_${layer}`,
+            sourcePanelId: panel.id,
+            name: `${panel.name} (${side})`,
+            roleLabel: ROLE_LABELS.wood_arch,
+            lengthCm: lenCm,
+            widthCm: widCm,
+            thicknessCm: 1.8,
+            materialId: panel.materialId,
+            edgeBanding: eb,
+            edgeMetersPerPiece: layer === 1 ? calcEdgeMeters(panel.dimensions.depth, panel.dimensions.height, eb) : 0,
+            edgeLabel: layer === 1 ? formatEdgeSummary(eb) : 'ضمن التدبيل',
+            workshopNotes: archNote,
+          })
+        }
       }
       continue
     }
@@ -372,8 +426,8 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
       continue
     }
 
-    // 4. السوكلة / الوزرة الخشب: 4 عوارض كونتر 18 مم
-    if (panel.role === 'plinth_base') {
+    // 4. السوكلة / الوزرة الخشب (الظاهرة والغاطسة): 4 عوارض كونتر 18 مم
+    if (panel.role === 'plinth_base' || panel.role === 'plinth_recessed') {
       const wall = 1.8
       const h = roundTo(panel.dimensions.height, 2)
       const w = roundTo(panel.dimensions.width, 2)

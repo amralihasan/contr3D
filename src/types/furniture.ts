@@ -10,9 +10,17 @@ export type PanelRole =
   | 'sliding_door'
   | 'drawer'
   | 'plinth_base'
+  | 'plinth_recessed'
   | 'wood_legs'
   | 'metal_legs'
+  | 'metal_frame'
+  | 'metal_u_legs'
+  | 'metal_x_legs'
+  | 'wood_pillars'
+  | 'wood_arch'
   | 'custom'
+
+export type MetalBaseColor = 'matte_black' | 'gold' | 'matte_white' | 'anthracite'
 
 export type MaterialId =
   | 'white'
@@ -112,6 +120,8 @@ export interface FurniturePanel {
   handle?: PanelHandleConfig
   /** جهة المفصلة للضلفة المفصلية أو اتجاه انزلاق الضلفة الجرار */
   hingeSide?: HingeSide
+  /** لون القاعدة المعدنية (أسود مط، ذهبي، أبيض مط، أنثراسيت) */
+  metalColor?: MetalBaseColor
 }
 
 export type ToolMode = 'select' | 'tape'
@@ -208,11 +218,7 @@ export function getPanelCategory(panel: Pick<FurniturePanel, 'role' | 'category'
   ) {
     return 'front'
   }
-  if (
-    panel.role === 'plinth_base' ||
-    panel.role === 'wood_legs' ||
-    panel.role === 'metal_legs'
-  ) {
+  if (isLegOrBaseRole(panel.role)) {
     return 'base'
   }
   return 'panel'
@@ -223,7 +229,26 @@ export function isInterfaceRole(role: PanelRole): boolean {
 }
 
 export function isLegOrBaseRole(role: PanelRole): boolean {
-  return role === 'plinth_base' || role === 'wood_legs' || role === 'metal_legs'
+  return (
+    role === 'plinth_base' ||
+    role === 'plinth_recessed' ||
+    role === 'wood_legs' ||
+    role === 'metal_legs' ||
+    role === 'metal_frame' ||
+    role === 'metal_u_legs' ||
+    role === 'metal_x_legs' ||
+    role === 'wood_pillars' ||
+    role === 'wood_arch'
+  )
+}
+
+export function isMetalBaseRole(role: PanelRole): boolean {
+  return (
+    role === 'metal_legs' ||
+    role === 'metal_frame' ||
+    role === 'metal_u_legs' ||
+    role === 'metal_x_legs'
+  )
 }
 
 export function getDefaultEdgeBanding(role: PanelRole): EdgeBanding {
@@ -235,12 +260,19 @@ export function getDefaultEdgeBanding(role: PanelRole): EdgeBanding {
     case 'back':
     case 'wood_legs':
     case 'metal_legs':
+    case 'metal_frame':
+    case 'metal_u_legs':
+    case 'metal_x_legs':
+    case 'wood_pillars':
       return { top: false, bottom: false, right: false, left: false }
+    case 'wood_arch':
+      return { top: true, bottom: false, right: true, left: true }
     case 'horizontal':
     case 'vertical':
     case 'shelf':
     case 'divider':
     case 'plinth_base':
+    case 'plinth_recessed':
     case 'custom':
       return { top: true, bottom: false, right: false, left: false }
   }
