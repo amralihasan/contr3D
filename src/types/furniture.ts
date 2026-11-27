@@ -181,6 +181,15 @@ export interface SavedDesign {
   thumbnail?: string
 }
 
+export interface SavedDesignSummary {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  panelsCount: number
+  thumbnail?: string
+}
+
 export interface CustomTemplate {
   id: string
   name: string

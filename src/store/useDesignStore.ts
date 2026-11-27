@@ -30,6 +30,7 @@ import {
   type PanelHandleConfig,
   type PanelRole,
   type SavedDesign,
+  type SavedDesignSummary,
   type SnapFeedback,
   type TapeMode,
   type ToolMode,
@@ -43,15 +44,19 @@ import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/sna
 import {
   deepClone,
   deleteCustomTemplate,
-  deleteSavedDesign,
+  deleteCustomTemplateFromServer,
+  deleteDesignFromServer,
+  fetchCustomTemplatesFromServer,
+  fetchDesignByIdFromServer,
+  fetchDesignsFromServer,
   loadCustomTemplates,
-  loadSavedDesigns,
   loadUiPreferences,
   sanitizeGuides,
   sanitizePanels,
   saveAutosave,
   saveCustomTemplate,
-  saveDesignByName,
+  saveCustomTemplateToServer,
+  saveDesignToServer,
   saveUiPreferences,
 } from '../utils/storage'
 import { buildGuideLineGeometry, type ReferenceEdge } from '../utils/tapeMeasure'
@@ -176,10 +181,9 @@ function computeDesignSignature(panels: FurniturePanel[], guides: GuideLine[]): 
   return JSON.stringify({ panels, guides })
 }
 
-// يبدأ التطبيق دائماً بمشهد فارغ دون استعادة تلقائية لآخر مسودة، مع الحفاظ على التصاميم والقوالب المحفوظة
+// يبدأ التطبيق دائماً بمشهد فارغ دون استعادة تلقائية لآخر مسودة، وتُجلب التصاميم من السيرفر
 const EMPTY_DESIGN_SIGNATURE = computeDesignSignature([], [])
 const initialUiPrefs = loadUiPreferences()
-const initialSavedDesigns = loadSavedDesigns()
 
 export type ImageExportMode = 'clean' | 'transparent' | 'three_angles' | 'sketch' | 'ecommerce'
 export type RenderMode = 'normal' | 'sketch' | 'ecommerce_white'
@@ -335,7 +339,10 @@ interface DesignState {
   // Persistence
   currentDesignId: string | null
   currentDesignName: string
-  savedDesigns: SavedDesign[]
+  savedDesigns: SavedDesignSummary[]
+  designsLoading: boolean
+  designsActionLoading: boolean
+  designsError: string | null
   customTemplates: CustomTemplate[]
   lastSavedAt: number | null
   lastSaveKind: 'manual' | 'auto' | null
@@ -343,21 +350,24 @@ interface DesignState {
   savedSignature: string
   hasUnsavedChanges: boolean
   toggleAutoSave: () => void
-  performAutoSave: () => boolean
+  performAutoSave: () => Promise<boolean>
+  clearDesignsError: () => void
+  refreshSavedDesigns: () => Promise<SavedDesignSummary[]>
+  refreshCustomTemplates: () => Promise<void>
   newEmptyDesign: () => void
   resetToStarterTemplate: () => void
   applyFurnitureTemplate: (templateId: string, mode: 'replace' | 'append') => void
   saveAsCustomTemplate: (name: string, scope: 'all' | 'selected') => CustomTemplate | null
   applyCustomTemplate: (templateId: string, mode: 'replace' | 'append') => void
   removeCustomTemplate: (templateId: string) => void
-  saveCurrentDesign: (name: string, asNew?: boolean) => SavedDesign
+  saveCurrentDesign: (name: string, asNew?: boolean) => Promise<SavedDesign | null>
   importDesignProject: (data: {
     name: string
     panels: FurniturePanel[]
     guides: GuideLine[]
-  }) => SavedDesign
-  loadDesign: (id: string) => void
-  removeSavedDesign: (id: string) => void
+  }) => Promise<SavedDesign | null>
+  loadDesign: (id: string) => Promise<boolean>
+  removeSavedDesign: (id: string) => Promise<boolean>
 }
 
 function pushPast(
@@ -465,7 +475,10 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   currentDesignId: null,
   currentDesignName: 'تصميم جديد',
-  savedDesigns: initialSavedDesigns,
+  savedDesigns: [],
+  designsLoading: false,
+  designsActionLoading: false,
+  designsError: null,
   customTemplates: loadCustomTemplates(),
   lastSavedAt: null,
   lastSaveKind: null,
@@ -1695,7 +1708,30 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     })
   },
 
-  performAutoSave: () => {
+  clearDesignsError: () => set({ designsError: null }),
+
+  refreshSavedDesigns: async () => {
+    set({ designsLoading: true, designsError: null })
+    try {
+      const list = await fetchDesignsFromServer()
+      set({ savedDesigns: list, designsLoading: false })
+      return list
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'تعذر الاتصال بالسيرفر لجلب التصاميم.'
+      set({ designsLoading: false, designsError: message })
+      return get().savedDesigns
+    }
+  },
+
+  refreshCustomTemplates: async () => {
+    const serverTemplates = await fetchCustomTemplatesFromServer()
+    if (serverTemplates) {
+      set({ customTemplates: serverTemplates })
+    }
+  },
+
+  performAutoSave: async () => {
     const {
       autoSaveEnabled,
       panels,
@@ -1728,27 +1764,41 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       targetName = `مسودة تلقائية - ${stamp}`
     }
 
-    const { design, allDesigns } = saveDesignByName(
-      targetName,
-      panels,
-      guides,
-      isExisting ? currentDesignId : null,
-      thumbnail,
-      !isExisting
-    )
-    const nextSignature = computeDesignSignature(panels, guides)
-    saveAutosave(panels, guides, design.name, design.id)
+    try {
+      const { design, summary } = await saveDesignToServer({
+        id: isExisting ? currentDesignId : null,
+        name: targetName,
+        panels,
+        guides,
+        thumbnail,
+        asNew: !isExisting,
+      })
 
-    set({
-      savedDesigns: allDesigns,
-      currentDesignId: design.id,
-      currentDesignName: design.name,
-      lastSavedAt: design.updatedAt,
-      lastSaveKind: 'auto',
-      savedSignature: nextSignature,
-      hasUnsavedChanges: false,
-    })
-    return true
+      const latest = get()
+      const nextSignature = computeDesignSignature(panels, guides)
+      const stillMatchesCurrent =
+        computeDesignSignature(latest.panels, latest.guides) === nextSignature
+      const nextDesigns = [
+        summary,
+        ...latest.savedDesigns.filter((d) => d.id !== summary.id),
+      ].sort((a, b) => b.updatedAt - a.updatedAt)
+
+      saveAutosave(panels, guides, design.name, design.id)
+
+      set({
+        savedDesigns: nextDesigns,
+        currentDesignId: design.id,
+        currentDesignName: design.name,
+        lastSavedAt: design.updatedAt,
+        lastSaveKind: 'auto',
+        savedSignature: nextSignature,
+        hasUnsavedChanges: !stillMatchesCurrent,
+      })
+      return true
+    } catch {
+      // في حالة انقطاع الاتصال بالسيرفر، نحافظ على حالة التعديلات للمحاولة في الدورة القادمة
+      return false
+    }
   },
 
   newEmptyDesign: () => {
@@ -1893,6 +1943,8 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const saved = saveCustomTemplate(name, targetPanels, thumbnail)
     if (!saved) return null
 
+    void saveCustomTemplateToServer(saved.template)
+
     set({
       customTemplates: saved.allTemplates,
       statusToast: `تم حفظ القالب المخصص: ${saved.template.name}`,
@@ -1994,112 +2046,186 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   removeCustomTemplate: (templateId) => {
     const nextList = deleteCustomTemplate(templateId)
+    void deleteCustomTemplateFromServer(templateId)
     set({
       customTemplates: nextList,
       statusToast: 'تم حذف القالب المخصص',
     })
   },
 
-  saveCurrentDesign: (name, asNew = false) => {
+  saveCurrentDesign: async (name, asNew = false) => {
     const { panels, guides, currentDesignId } = get()
     const thumbnail = captureSceneThumbnail()
-    const { design, allDesigns } = saveDesignByName(
-      name,
-      panels,
-      guides,
-      asNew ? null : currentDesignId,
-      thumbnail,
-      asNew
-    )
-    const nextSignature = computeDesignSignature(panels, guides)
-    saveAutosave(panels, guides, design.name, design.id)
-    set({
-      savedDesigns: allDesigns,
-      currentDesignId: design.id,
-      currentDesignName: design.name,
-      lastSavedAt: design.updatedAt,
-      lastSaveKind: 'manual',
-      savedSignature: nextSignature,
-      hasUnsavedChanges: false,
-      statusToast: asNew ? `تم حفظ نسخة جديدة: ${design.name}` : `تم حفظ التعديلات: ${design.name}`,
-    })
-    return design
+    set({ designsActionLoading: true, designsError: null })
+
+    try {
+      const { design, summary } = await saveDesignToServer({
+        id: asNew ? null : currentDesignId,
+        name,
+        panels,
+        guides,
+        thumbnail,
+        asNew,
+      })
+
+      const nextSignature = computeDesignSignature(panels, guides)
+      const nextList = [
+        summary,
+        ...get().savedDesigns.filter((d) => d.id !== summary.id),
+      ].sort((a, b) => b.updatedAt - a.updatedAt)
+
+      saveAutosave(panels, guides, design.name, design.id)
+      set({
+        savedDesigns: nextList,
+        designsActionLoading: false,
+        currentDesignId: design.id,
+        currentDesignName: design.name,
+        lastSavedAt: design.updatedAt,
+        lastSaveKind: 'manual',
+        savedSignature: nextSignature,
+        hasUnsavedChanges: false,
+        statusToast: asNew ? `تم حفظ نسخة جديدة: ${design.name}` : `تم حفظ التعديلات: ${design.name}`,
+      })
+      return design
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'تعذر حفظ التصميم على السيرفر.'
+      set({
+        designsActionLoading: false,
+        designsError: message,
+        statusToast: message,
+      })
+      return null
+    }
   },
 
-  importDesignProject: (data) => {
+  importDesignProject: async (data) => {
     const { panels, guides, past } = get()
     const cleanPanels = sanitizePanels(deepClone(data.panels))
     const cleanGuides = sanitizeGuides(deepClone(data.guides))
-    const thumbnail = captureSceneThumbnail()
-    const { design, allDesigns } = saveDesignByName(
-      data.name,
-      cleanPanels,
-      cleanGuides,
-      null,
-      thumbnail,
-      true
-    )
     const nextSignature = computeDesignSignature(cleanPanels, cleanGuides)
-    saveAutosave(cleanPanels, cleanGuides, design.name, design.id)
 
+    // فتح المشروع المستورد في المشهد مباشرةً ثم حفظه على السيرفر
     set({
       panels: cleanPanels,
       guides: cleanGuides,
-      savedDesigns: allDesigns,
       selectedPanelId: null,
       selectedPanelIds: [],
       selectedGuideId: null,
       activeReferenceEdge: null,
-      currentDesignId: design.id,
-      currentDesignName: design.name,
-      lastSavedAt: design.updatedAt,
-      lastSaveKind: 'manual',
+      currentDesignId: null,
+      currentDesignName: data.name,
       savedSignature: nextSignature,
-      hasUnsavedChanges: false,
+      hasUnsavedChanges: true,
       past: pushPast(past, panels, guides),
       future: [],
-      statusToast: `تم استيراد وفتح المشروع: ${design.name}`,
+      designsActionLoading: true,
+      designsError: null,
     })
 
-    return design
+    const thumbnail = captureSceneThumbnail()
+    try {
+      const { design, summary } = await saveDesignToServer({
+        id: null,
+        name: data.name,
+        panels: cleanPanels,
+        guides: cleanGuides,
+        thumbnail,
+        asNew: true,
+      })
+      const nextList = [
+        summary,
+        ...get().savedDesigns.filter((d) => d.id !== summary.id),
+      ].sort((a, b) => b.updatedAt - a.updatedAt)
+
+      saveAutosave(cleanPanels, cleanGuides, design.name, design.id)
+      set({
+        savedDesigns: nextList,
+        designsActionLoading: false,
+        currentDesignId: design.id,
+        currentDesignName: design.name,
+        lastSavedAt: design.updatedAt,
+        lastSaveKind: 'manual',
+        hasUnsavedChanges: false,
+        statusToast: `تم استيراد وفتح المشروع: ${design.name}`,
+      })
+      return design
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'تم فتح الملف محلياً، لكن تعذر رفعه للسيرفر.'
+      set({
+        designsActionLoading: false,
+        designsError: message,
+        statusToast: message,
+      })
+      return null
+    }
   },
 
-  loadDesign: (id) => {
-    const { savedDesigns, panels, guides, past } = get()
-    const found = savedDesigns.find((d) => d.id === id)
-    if (!found) return
+  loadDesign: async (id) => {
+    const { panels, guides, past } = get()
+    set({ designsActionLoading: true, designsError: null })
 
-    const loadedPanels = sanitizePanels(deepClone(found.panels))
-    const loadedGuides = sanitizeGuides(deepClone(found.guides ?? []))
-    const nextSignature = computeDesignSignature(loadedPanels, loadedGuides)
-    saveAutosave(loadedPanels, loadedGuides, found.name, found.id)
+    try {
+      const found = await fetchDesignByIdFromServer(id)
+      const loadedPanels = sanitizePanels(deepClone(found.panels))
+      const loadedGuides = sanitizeGuides(deepClone(found.guides ?? []))
+      const nextSignature = computeDesignSignature(loadedPanels, loadedGuides)
+      saveAutosave(loadedPanels, loadedGuides, found.name, found.id)
 
-    set({
-      panels: loadedPanels,
-      guides: loadedGuides,
-      selectedPanelId: null,
-      selectedPanelIds: [],
-      selectedGuideId: null,
-      activeReferenceEdge: null,
-      currentDesignId: found.id,
-      currentDesignName: found.name,
-      lastSavedAt: found.updatedAt || null,
-      lastSaveKind: 'manual',
-      savedSignature: nextSignature,
-      hasUnsavedChanges: false,
-      past: pushPast(past, panels, guides),
-      future: [],
-      statusToast: `تم فتح المشروع: ${found.name}`,
-    })
+      set({
+        panels: loadedPanels,
+        guides: loadedGuides,
+        selectedPanelId: null,
+        selectedPanelIds: [],
+        selectedGuideId: null,
+        activeReferenceEdge: null,
+        currentDesignId: found.id,
+        currentDesignName: found.name,
+        lastSavedAt: found.updatedAt || null,
+        lastSaveKind: 'manual',
+        savedSignature: nextSignature,
+        hasUnsavedChanges: false,
+        designsActionLoading: false,
+        past: pushPast(past, panels, guides),
+        future: [],
+        statusToast: `تم فتح المشروع: ${found.name}`,
+      })
+      return true
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'تعذر فتح التصميم من السيرفر.'
+      set({
+        designsActionLoading: false,
+        designsError: message,
+        statusToast: message,
+      })
+      return false
+    }
   },
 
-  removeSavedDesign: (id) => {
-    const nextList = deleteSavedDesign(id)
-    set((state) => ({
-      savedDesigns: nextList,
-      currentDesignId: state.currentDesignId === id ? null : state.currentDesignId,
-      hasUnsavedChanges: state.currentDesignId === id ? true : state.hasUnsavedChanges,
-    }))
+  removeSavedDesign: async (id) => {
+    set({ designsActionLoading: true, designsError: null })
+    try {
+      await deleteDesignFromServer(id)
+      set((state) => ({
+        savedDesigns: state.savedDesigns.filter((d) => d.id !== id),
+        designsActionLoading: false,
+        currentDesignId: state.currentDesignId === id ? null : state.currentDesignId,
+        hasUnsavedChanges: state.currentDesignId === id ? true : state.hasUnsavedChanges,
+        statusToast: 'تم حذف التصميم من السيرفر',
+      }))
+      return true
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'تعذر حذف التصميم من السيرفر.'
+      set({
+        designsActionLoading: false,
+        designsError: message,
+        statusToast: message,
+      })
+      return false
+    }
   },
   }
 })

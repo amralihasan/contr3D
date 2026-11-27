@@ -23,6 +23,11 @@ import { checkStoredAuthSession, clearAuthSession } from './utils/auth'
 
 function WorkspaceApp({ onLock }: { onLock: () => void }) {
   useAutoSave()
+
+  useEffect(() => {
+    void useDesignStore.getState().refreshSavedDesigns()
+    void useDesignStore.getState().refreshCustomTemplates()
+  }, [])
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [ecommerceExportOpen, setEcommerceExportOpen] = useState(false)

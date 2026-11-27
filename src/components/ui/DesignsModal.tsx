@@ -8,14 +8,16 @@ import {
   FilePlus2,
   FolderOpen,
   Layers,
+  Loader2,
+  RefreshCw,
   Save,
   Trash2,
   Upload,
   X,
 } from 'lucide-react'
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { SavedDesign } from '../../types/furniture'
+import type { SavedDesignSummary } from '../../types/furniture'
 import {
   exportProjectToJsonFile,
   parseAndValidateProjectJson,
@@ -38,6 +40,11 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
   const panels = useDesignStore((s) => s.panels)
   const guides = useDesignStore((s) => s.guides)
   const savedDesigns = useDesignStore((s) => s.savedDesigns)
+  const designsLoading = useDesignStore((s) => s.designsLoading)
+  const designsActionLoading = useDesignStore((s) => s.designsActionLoading)
+  const designsError = useDesignStore((s) => s.designsError)
+  const refreshSavedDesigns = useDesignStore((s) => s.refreshSavedDesigns)
+  const clearDesignsError = useDesignStore((s) => s.clearDesignsError)
   const saveCurrentDesign = useDesignStore((s) => s.saveCurrentDesign)
   const importDesignProject = useDesignStore((s) => s.importDesignProject)
   const loadDesign = useDesignStore((s) => s.loadDesign)
@@ -48,8 +55,13 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [previewDesign, setPreviewDesign] = useState<SavedDesign | null>(null)
+  const [openingId, setOpeningId] = useState<string | null>(null)
+  const [previewDesign, setPreviewDesign] = useState<SavedDesignSummary | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    void refreshSavedDesigns()
+  }, [refreshSavedDesigns])
 
   const hasSavedMatch = Boolean(
     currentDesignId && savedDesigns.some((d) => d.id === currentDesignId)
@@ -60,10 +72,21 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
     setTimeout(() => setNoticeMsg((curr) => (curr === msg ? null : curr)), 2400)
   }
 
-  const handleSave = (asNew = false) => {
-    const saved = saveCurrentDesign(nameInput, asNew)
-    setNameInput(saved.name)
-    showTempNotice(asNew ? 'تم حفظ نسخة جديدة بنجاح' : 'تم حفظ التعديلات بنجاح')
+  const handleSave = async (asNew = false) => {
+    const saved = await saveCurrentDesign(nameInput, asNew)
+    if (saved) {
+      setNameInput(saved.name)
+      showTempNotice(asNew ? 'تم حفظ نسخة جديدة على السيرفر' : 'تم حفظ التعديلات على السيرفر')
+    }
+  }
+
+  const handleOpenDesign = async (id: string) => {
+    setOpeningId(id)
+    const ok = await loadDesign(id)
+    setOpeningId(null)
+    if (ok) {
+      onClose()
+    }
   }
 
   const handleExportJson = () => {
@@ -80,8 +103,10 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
     try {
       const text = await file.text()
       const parsed = parseAndValidateProjectJson(text)
-      importDesignProject(parsed)
-      onClose()
+      const saved = await importDesignProject(parsed)
+      if (saved) {
+        onClose()
+      }
     } catch (err) {
       setImportError(
         err instanceof Error ? err.message : 'تعذر قراءة ملف المشروع، تأكد من صلاحية الملف.'
@@ -159,18 +184,26 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => handleSave(false)}
-                className="flex h-11 min-w-[140px] flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 text-xs font-extrabold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98] sm:flex-initial sm:text-sm"
+                disabled={designsActionLoading}
+                onClick={() => void handleSave(false)}
+                className="flex h-11 min-w-[140px] flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 text-xs font-extrabold text-slate-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.98] disabled:opacity-60 sm:flex-initial sm:text-sm"
               >
-                {noticeMsg ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                {designsActionLoading && !openingId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : noticeMsg ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
                 <span>{noticeMsg ?? (hasSavedMatch ? 'حفظ التعديلات' : 'حفظ التصميم')}</span>
               </button>
 
               {hasSavedMatch && (
                 <button
                   type="button"
-                  onClick={() => handleSave(true)}
-                  className="flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-700 bg-slate-800 px-3.5 text-xs font-bold text-slate-100 transition hover:bg-slate-700 active:scale-[0.98]"
+                  disabled={designsActionLoading}
+                  onClick={() => void handleSave(true)}
+                  className="flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-slate-700 bg-slate-800 px-3.5 text-xs font-bold text-slate-100 transition hover:bg-slate-700 active:scale-[0.98] disabled:opacity-60"
                 >
                   <CopyPlus className="h-4 w-4 text-amber-400" />
                   <span>حفظ كجديد</span>
@@ -204,8 +237,9 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
 
             <button
               type="button"
+              disabled={designsActionLoading}
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-3.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/20 active:scale-[0.98]"
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-3.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/20 active:scale-[0.98] disabled:opacity-60"
             >
               <Upload className="h-4 w-4 text-emerald-300" />
               <span>استيراد ملف مشروع (.json)</span>
@@ -215,37 +249,73 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
               ref={fileInputRef}
               type="file"
               accept=".json,application/json"
-              onChange={handleImportFileChange}
+              onChange={(e) => void handleImportFileChange(e)}
               className="hidden"
             />
           </div>
 
-          {importError && (
+          {(importError || designsError) && (
             <div
               role="alert"
-              className="mt-3 flex items-start gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200"
+              className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200"
             >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
-              <span>{importError}</span>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+                <span>{importError ?? designsError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportError(null)
+                  clearDesignsError()
+                  void refreshSavedDesigns()
+                }}
+                className="shrink-0 rounded-xl border border-rose-400/40 bg-rose-500/15 px-2.5 py-1 text-[11px] font-bold text-rose-100 transition hover:bg-rose-500/25"
+              >
+                إعادة المحاولة
+              </button>
             </div>
           )}
         </div>
 
-        {/* جدول المشاريع المحفوظة */}
+        {/* جدول المشاريع المحفوظة على السيرفر */}
         <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-xs font-bold text-slate-400">
-              التصاميم المحفوظة على هذا الجهاز ({savedDesigns.length})
+              التصاميم المحفوظة على السيرفر ({savedDesigns.length})
             </div>
+            <button
+              type="button"
+              disabled={designsLoading}
+              onClick={() => void refreshSavedDesigns()}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-[11px] font-bold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${designsLoading ? 'animate-spin' : ''}`} />
+              <span>تحديث القائمة</span>
+            </button>
           </div>
 
-          {savedDesigns.length === 0 ? (
+          {designsLoading && savedDesigns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-3xl border border-slate-800 bg-slate-950/40 p-10 text-xs font-semibold text-slate-400">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+              <span>جاري تحميل التصاميم من السيرفر...</span>
+            </div>
+          ) : savedDesigns.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-800 p-8 text-center text-xs text-slate-400">
-              لا توجد مشاريع محفوظة بعد. اكتب اسم المشروع واضغط &quot;حفظ التصميم&quot; أو
-              استورد ملف <span className="font-mono text-slate-300">.json</span>.
+              لا توجد مشاريع محفوظة على السيرفر بعد. اكتب اسم المشروع واضغط &quot;حفظ التصميم&quot;
+              أو استورد ملف <span className="font-mono text-slate-300">.json</span>.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+            <div className="relative overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
+              {designsLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/45 backdrop-blur-[1px]">
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-bold text-amber-300 shadow-lg">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>جاري تحديث القائمة...</span>
+                  </div>
+                </div>
+              )}
+
               <table className="w-full min-w-[680px] border-collapse text-right text-xs">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-900/90 text-[11px] font-bold text-slate-400">
@@ -260,6 +330,7 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                   {savedDesigns.map((design) => {
                     const isCurrent = design.id === currentDesignId
                     const isConfirmingDelete = confirmDeleteId === design.id
+                    const isOpeningThis = openingId === design.id
                     const createdTs = design.createdAt || design.updatedAt
 
                     return (
@@ -285,7 +356,7 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                           </div>
                           <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900 px-2 py-0.5 text-[11px] font-bold text-slate-300">
                             <Layers className="h-3 w-3 text-amber-400" />
-                            <span>{design.panels.length} قطعة</span>
+                            <span>{design.panelsCount} قطعة</span>
                           </div>
                         </td>
 
@@ -333,25 +404,29 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                loadDesign(design.id)
-                                onClose()
-                              }}
-                              className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-3.5 text-xs font-bold text-slate-100 transition hover:bg-amber-500 hover:text-slate-950 active:scale-[0.98]"
+                              disabled={designsActionLoading}
+                              onClick={() => void handleOpenDesign(design.id)}
+                              className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-3.5 text-xs font-bold text-slate-100 transition hover:bg-amber-500 hover:text-slate-950 active:scale-[0.98] disabled:opacity-60"
                             >
-                              <FolderOpen className="h-4 w-4 shrink-0" />
-                              <span>فتح</span>
+                              {isOpeningThis ? (
+                                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                              ) : (
+                                <FolderOpen className="h-4 w-4 shrink-0" />
+                              )}
+                              <span>{isOpeningThis ? 'جاري الفتح...' : 'فتح'}</span>
                             </button>
 
                             {isConfirmingDelete ? (
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
+                                  disabled={designsActionLoading}
                                   onClick={() => {
-                                    removeSavedDesign(design.id)
-                                    setConfirmDeleteId(null)
+                                    void removeSavedDesign(design.id).then((ok) => {
+                                      if (ok) setConfirmDeleteId(null)
+                                    })
                                   }}
-                                  className="h-11 rounded-xl bg-rose-500 px-3 text-xs font-extrabold text-white transition hover:bg-rose-400"
+                                  className="h-11 rounded-xl bg-rose-500 px-3 text-xs font-extrabold text-white transition hover:bg-rose-400 disabled:opacity-60"
                                 >
                                   تأكيد
                                 </button>
@@ -366,8 +441,9 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                             ) : (
                               <button
                                 type="button"
+                                disabled={designsActionLoading}
                                 onClick={() => setConfirmDeleteId(design.id)}
-                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 transition hover:border-rose-500/40 hover:bg-rose-500/15 hover:text-rose-400"
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 transition hover:border-rose-500/40 hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-50"
                                 title="حذف المشروع"
                                 aria-label={`حذف ${design.name}`}
                               >
@@ -405,7 +481,7 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                   {previewDesign.name}
                 </h3>
                 <p className="mt-0.5 text-[11px] text-slate-400">
-                  {previewDesign.panels.length} قطعة · آخر تعديل:{' '}
+                  {previewDesign.panelsCount} قطعة · آخر تعديل:{' '}
                   {formatDate(previewDesign.updatedAt)}
                 </p>
               </div>
@@ -437,12 +513,13 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 type="button"
+                disabled={designsActionLoading}
                 onClick={() => {
-                  loadDesign(previewDesign.id)
+                  const id = previewDesign.id
                   setPreviewDesign(null)
-                  onClose()
+                  void handleOpenDesign(id)
                 }}
-                className="flex h-11 items-center gap-1.5 rounded-2xl bg-amber-500 px-5 text-xs font-extrabold text-slate-950 transition hover:bg-amber-400"
+                className="flex h-11 items-center gap-1.5 rounded-2xl bg-amber-500 px-5 text-xs font-extrabold text-slate-950 transition hover:bg-amber-400 disabled:opacity-60"
               >
                 <FolderOpen className="h-4 w-4" />
                 <span>فتح وإكمال العمل</span>

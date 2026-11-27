@@ -10,7 +10,7 @@ export function useAutoSave() {
     if (!autoSaveEnabled) return
 
     const timerId = window.setInterval(() => {
-      useDesignStore.getState().performAutoSave()
+      void useDesignStore.getState().performAutoSave()
     }, AUTO_SAVE_INTERVAL_MS)
 
     return () => {

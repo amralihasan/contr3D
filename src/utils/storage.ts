@@ -18,6 +18,7 @@ import {
   type PanelRole,
   type PricingConfig,
   type SavedDesign,
+  type SavedDesignSummary,
   type Vec3,
 } from '../types/furniture'
 import { computeOverallDimensions } from './dimensions'
@@ -524,6 +525,279 @@ export function deleteSavedDesign(id: string): SavedDesign[] {
   const next = loadSavedDesigns().filter((d) => d.id !== id)
   persistSavedDesigns(next)
   return next
+}
+
+async function parseApiErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const data: unknown = await res.json()
+    if (data && typeof data === 'object' && 'error' in data) {
+      const errVal = (data as { error?: unknown }).error
+      if (typeof errVal === 'string' && errVal.trim()) {
+        return errVal
+      }
+    }
+  } catch {
+    // ignore invalid json
+  }
+  return fallback
+}
+
+function normalizeSummary(raw: unknown): SavedDesignSummary | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  if (typeof obj.id !== 'string' || !obj.id || typeof obj.name !== 'string') return null
+  const updatedAt =
+    typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt) ? obj.updatedAt : 0
+  const createdAt =
+    typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) && obj.createdAt > 0
+      ? obj.createdAt
+      : updatedAt
+  const panelsCount =
+    typeof obj.panelsCount === 'number' && Number.isFinite(obj.panelsCount)
+      ? obj.panelsCount
+      : Array.isArray(obj.panels)
+        ? obj.panels.length
+        : 0
+
+  return {
+    id: obj.id,
+    name: obj.name,
+    createdAt,
+    updatedAt,
+    panelsCount,
+    thumbnail:
+      typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+        ? obj.thumbnail
+        : undefined,
+  }
+}
+
+function normalizeFullDesign(raw: unknown): SavedDesign | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  if (typeof obj.id !== 'string' || !obj.id || typeof obj.name !== 'string') return null
+  const updatedAt =
+    typeof obj.updatedAt === 'number' && Number.isFinite(obj.updatedAt) ? obj.updatedAt : 0
+  const createdAt =
+    typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) && obj.createdAt > 0
+      ? obj.createdAt
+      : updatedAt
+
+  return {
+    id: obj.id,
+    name: obj.name,
+    createdAt,
+    updatedAt,
+    panels: sanitizePanels(obj.panels),
+    guides: sanitizeGuides(obj.guides),
+    thumbnail:
+      typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+        ? obj.thumbnail
+        : undefined,
+  }
+}
+
+export async function fetchDesignsFromServer(): Promise<SavedDesignSummary[]> {
+  let res: Response
+  try {
+    res = await fetch('/api/designs')
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر، تأكد من تشغيل السيرفر المحلي (npm run server).')
+  }
+
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res, 'تعذر جلب التصاميم من السيرفر.'))
+  }
+
+  const data: unknown = await res.json()
+  const rawList =
+    data && typeof data === 'object' && 'designs' in data && Array.isArray((data as { designs: unknown }).designs)
+      ? (data as { designs: unknown[] }).designs
+      : []
+
+  const list: SavedDesignSummary[] = []
+  for (const item of rawList) {
+    const normalized = normalizeSummary(item)
+    if (normalized) list.push(normalized)
+  }
+  return list.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export async function fetchDesignByIdFromServer(id: string): Promise<SavedDesign> {
+  let res: Response
+  try {
+    res = await fetch(`/api/designs/${encodeURIComponent(id)}`)
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر لفتح التصميم، تأكد من تشغيل السيرفر.')
+  }
+
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res, 'تعذر تحميل ملف التصميم من السيرفر.'))
+  }
+
+  const data: unknown = await res.json()
+  const rawDesign =
+    data && typeof data === 'object' && 'design' in data
+      ? (data as { design: unknown }).design
+      : data
+  const normalized = normalizeFullDesign(rawDesign)
+  if (!normalized) {
+    throw new Error('بيانات التصميم المستلمة من السيرفر غير صالحة.')
+  }
+  return normalized
+}
+
+export async function saveDesignToServer(params: {
+  id?: string | null
+  name: string
+  panels: FurniturePanel[]
+  guides: GuideLine[]
+  thumbnail?: string
+  asNew?: boolean
+}): Promise<{ design: SavedDesign; summary: SavedDesignSummary }> {
+  const isUpdate = Boolean(!params.asNew && params.id)
+  const url = isUpdate
+    ? `/api/designs/${encodeURIComponent(params.id as string)}`
+    : '/api/designs'
+  const method = isUpdate ? 'PUT' : 'POST'
+
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: params.name.trim() || 'تصميم بدون اسم',
+        panels: deepClone(params.panels),
+        guides: deepClone(params.guides),
+        thumbnail: params.thumbnail,
+      }),
+    })
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر لحفظ التصميم، تأكد من تشغيل السيرفر.')
+  }
+
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res, 'تعذر حفظ التصميم على السيرفر.'))
+  }
+
+  const data: unknown = await res.json()
+  const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
+  const design = normalizeFullDesign(obj.design)
+  if (!design) {
+    throw new Error('استجابة السيرفر غير مكتملة بعد حفظ التصميم.')
+  }
+  const summary =
+    normalizeSummary(obj.summary) ?? {
+      id: design.id,
+      name: design.name,
+      createdAt: design.createdAt,
+      updatedAt: design.updatedAt,
+      panelsCount: design.panels.length,
+      thumbnail: design.thumbnail,
+    }
+
+  return { design, summary }
+}
+
+export async function deleteDesignFromServer(id: string): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch(`/api/designs/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر لحذف التصميم، تأكد من تشغيل السيرفر.')
+  }
+
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await parseApiErrorMessage(res, 'تعذر حذف التصميم من السيرفر.'))
+  }
+}
+
+function sanitizeCustomTemplateList(rawList: unknown): CustomTemplate[] {
+  if (!Array.isArray(rawList)) return []
+  const valid: CustomTemplate[] = []
+  for (const item of rawList) {
+    if (!item || typeof item !== 'object') continue
+    const obj = item as Record<string, unknown>
+    if (typeof obj.id !== 'string' || typeof obj.name !== 'string') continue
+    if (!Array.isArray(obj.panels)) continue
+
+    const withTempIds = obj.panels.map((p, idx) =>
+      p && typeof p === 'object' ? { ...(p as Record<string, unknown>), id: `tpl_${idx}` } : p
+    )
+    const cleaned = sanitizePanels(withTempIds)
+    if (cleaned.length === 0) continue
+
+    const blueprints = cleaned.map(({ id: _ignored, ...rest }) => rest)
+    const computed = computeOverallDimensions(cleaned)
+    const dimsRaw = obj.dimensions as Record<string, unknown> | undefined
+    const dimensions = {
+      width:
+        dimsRaw && typeof dimsRaw.width === 'number' && Number.isFinite(dimsRaw.width)
+          ? dimsRaw.width
+          : computed?.width ?? 0,
+      height:
+        dimsRaw && typeof dimsRaw.height === 'number' && Number.isFinite(dimsRaw.height)
+          ? dimsRaw.height
+          : computed?.height ?? 0,
+      depth:
+        dimsRaw && typeof dimsRaw.depth === 'number' && Number.isFinite(dimsRaw.depth)
+          ? dimsRaw.depth
+          : computed?.depth ?? 0,
+    }
+
+    valid.push({
+      id: obj.id,
+      name: obj.name,
+      createdAt:
+        typeof obj.createdAt === 'number' && Number.isFinite(obj.createdAt) ? obj.createdAt : 0,
+      dimensions,
+      panels: blueprints,
+      thumbnail:
+        typeof obj.thumbnail === 'string' && obj.thumbnail.startsWith('data:image/')
+          ? obj.thumbnail
+          : undefined,
+    })
+  }
+  return valid.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function fetchCustomTemplatesFromServer(): Promise<CustomTemplate[] | null> {
+  try {
+    const res = await fetch('/api/custom-templates')
+    if (!res.ok) return null
+    const data: unknown = await res.json()
+    if (!data || typeof data !== 'object' || !('templates' in data)) return null
+    const cleaned = sanitizeCustomTemplateList((data as { templates: unknown }).templates)
+    persistCustomTemplates(cleaned)
+    return cleaned
+  } catch {
+    return null
+  }
+}
+
+export async function saveCustomTemplateToServer(template: CustomTemplate): Promise<void> {
+  try {
+    await fetch('/api/custom-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(template),
+    })
+  } catch {
+    // fallback محفوظ محلياً بالفعل
+  }
+}
+
+export async function deleteCustomTemplateFromServer(id: string): Promise<void> {
+  try {
+    await fetch(`/api/custom-templates/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  } catch {
+    // fallback محفوظ محلياً بالفعل
+  }
 }
 
 export function saveAutosave(
