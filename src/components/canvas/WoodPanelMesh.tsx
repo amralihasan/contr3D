@@ -37,7 +37,6 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const renderMode = useDesignStore((s) => s.renderMode)
   const isSketch = renderMode === 'sketch'
   const isEcommerceWhite = renderMode === 'ecommerce_white'
-  const isEcommerceExport = useDesignStore((s) => s.exportMode === 'ecommerce')
   const isSelected = useDesignStore(
     (s) =>
       !s.isExporting &&
@@ -184,11 +183,9 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     ? '#1e293b'
     : isEcommerceWhite
       ? '#e2e8f0'
-      : isEcommerceExport
-        ? '#cbd5e1'
-        : isSelected
-          ? '#fbbf24'
-          : '#0f172a'
+      : isSelected
+        ? '#fbbf24'
+        : '#0f172a'
   const edgeWidth = isSketch ? 1.6 : isEcommerceWhite ? 1.3 : isSelected ? 2.6 : 0.8
   const edgeOpacity = isSketch ? 1 : isEcommerceWhite ? 1 : isSelected ? 1 : 0.22
 

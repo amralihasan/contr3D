@@ -53,6 +53,7 @@ export function WorkspaceGrid() {
   const renderMode = useDesignStore((s) => s.renderMode)
   const isSketch = renderMode === 'sketch'
   const isEcommerce = exportMode === 'ecommerce'
+  const isEcommerceWhite = renderMode === 'ecommerce_white'
   const isCleanExport = exportMode === 'clean' || exportMode === 'three_angles'
   const isTransparentExport = exportMode === 'transparent'
   const showSolidFloor = !isTransparentExport && !isSketch && !isEcommerce
@@ -69,18 +70,30 @@ export function WorkspaceGrid() {
       )}
       {!exportMode && !isSketch && <fog attach="fog" args={['#0f172a', 420, 880]} />}
 
-      <ambientLight intensity={isEcommerce ? 0.88 : isSketch ? 0.72 : isCleanExport ? 0.55 : 0.45} />
+      <ambientLight
+        intensity={
+          isEcommerceWhite
+            ? 0.85
+            : isEcommerce
+              ? 0.52
+              : isSketch
+                ? 0.72
+                : isCleanExport
+                  ? 0.55
+                  : 0.45
+        }
+      />
       <hemisphereLight
         args={[
           '#ffffff',
-          isEcommerce ? '#e2e8f0' : isSketch ? '#cbd5e1' : '#1e293b',
-          isEcommerce ? 0.65 : isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55,
+          isEcommerceWhite ? '#e2e8f0' : isEcommerce ? '#cbd5e1' : isSketch ? '#cbd5e1' : '#1e293b',
+          isEcommerceWhite ? 0.6 : isEcommerce ? 0.58 : isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55,
         ]}
       />
 
       <directionalLight
         position={[140, 220, 160]}
-        intensity={isEcommerce ? 0.95 : isSketch ? 0.75 : 1.35}
+        intensity={isEcommerceWhite ? 0.95 : isEcommerce ? 1.25 : isSketch ? 0.75 : 1.35}
         castShadow={!isSketch}
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
@@ -95,7 +108,7 @@ export function WorkspaceGrid() {
 
       <directionalLight
         position={[-140, 110, -120]}
-        intensity={isEcommerce ? 0.42 : isSketch ? 0.35 : 0.4}
+        intensity={isEcommerceWhite ? 0.42 : isEcommerce ? 0.38 : isSketch ? 0.35 : 0.4}
         color={isEcommerce ? '#f8fafc' : '#cbd5e1'}
       />
 

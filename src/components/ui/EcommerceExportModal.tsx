@@ -38,7 +38,7 @@ function EcommerceExportModalContent({ onClose }: { onClose: () => void }) {
   const panelsCount = useDesignStore((s) => s.panels.length)
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
 
-  const [whitePiece, setWhitePiece] = useState(true)
+  const [whitePiece, setWhitePiece] = useState(false)
   const [showInternalDimensions, setShowInternalDimensions] = useState(false)
   const [cameraAngle, setCameraAngle] = useState<EcommerceCameraAngle>('current')
   const [refreshSeq, setRefreshSeq] = useState(0)
