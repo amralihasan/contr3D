@@ -1,14 +1,21 @@
 import { Environment, Grid, Lightformer } from '@react-three/drei'
+import { useDesignStore } from '../../store/useDesignStore'
 
 export function WorkspaceGrid() {
+  const exportMode = useDesignStore((s) => s.exportMode)
+  const isCleanExport = exportMode === 'clean'
+  const isTransparentExport = exportMode === 'transparent'
+
   return (
     <>
-      {/* إضاءة ناعمة وواقعية لاستوديو التصميم */}
-      <color attach="background" args={['#0f172a']} />
-      <fog attach="fog" args={['#0f172a', 380, 760]} />
+      {/* الخلفية والضباب حسب الوضع العادي أو وضع تصدير الصورة */}
+      {!isTransparentExport && (
+        <color attach="background" args={[isCleanExport ? '#f1f5f9' : '#0f172a']} />
+      )}
+      {!exportMode && <fog attach="fog" args={['#0f172a', 380, 760]} />}
 
-      <ambientLight intensity={0.45} />
-      <hemisphereLight args={['#f8fafc', '#1e293b', 0.55]} />
+      <ambientLight intensity={isCleanExport ? 0.55 : 0.45} />
+      <hemisphereLight args={['#f8fafc', '#1e293b', isCleanExport ? 0.65 : 0.55]} />
 
       <directionalLight
         position={[140, 220, 160]}
@@ -56,23 +63,28 @@ export function WorkspaceGrid() {
       {/* أرضية استقبال الظلال عند Y = 0 */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[1200, 1200]} />
-        <shadowMaterial transparent opacity={0.34} />
+        <shadowMaterial
+          transparent
+          opacity={isCleanExport ? 0.18 : isTransparentExport ? 0.24 : 0.34}
+        />
       </mesh>
 
-      {/* شبكة أرضية مقسمة بالسنتيمتر: كل مربع صغير = 10 سم */}
-      <Grid
-        position={[0, 0.01, 0]}
-        args={[600, 600]}
-        cellSize={10}
-        cellThickness={0.75}
-        cellColor="#334155"
-        sectionSize={50}
-        sectionThickness={1.35}
-        sectionColor="#64748b"
-        fadeDistance={480}
-        fadeStrength={1.25}
-        infiniteGrid
-      />
+      {/* إخفاء الشبكة الأرضية مؤقتاً أثناء تصدير الصورة */}
+      {!exportMode && (
+        <Grid
+          position={[0, 0.01, 0]}
+          args={[600, 600]}
+          cellSize={10}
+          cellThickness={0.75}
+          cellColor="#334155"
+          sectionSize={50}
+          sectionThickness={1.35}
+          sectionColor="#64748b"
+          fadeDistance={480}
+          fadeStrength={1.25}
+          infiniteGrid
+        />
+      )}
     </>
   )
 }

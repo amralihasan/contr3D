@@ -1,5 +1,7 @@
 import {
   Box,
+  Camera,
+  ChevronDown,
   ClipboardList,
   Compass,
   DoorClosed,
@@ -8,16 +10,19 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
+  ImageDown,
   Layers,
   Magnet,
   Redo2,
   Ruler,
   Save,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Undo2,
   User,
 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { CameraPreset } from '../../types/furniture'
 
@@ -73,6 +78,22 @@ export function TopToolbar({
   const toggleHumanReference = useDesignStore((s) => s.toggleHumanReference)
   const humanScalePreset = useDesignStore((s) => s.humanScalePreset)
   const setHumanScalePreset = useDesignStore((s) => s.setHumanScalePreset)
+  const triggerExportImage = useDesignStore((s) => s.triggerExportImage)
+  const isExporting = useDesignStore((s) => s.isExporting)
+
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const onOutside = (e: PointerEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onOutside)
+    return () => window.removeEventListener('pointerdown', onOutside)
+  }, [exportMenuOpen])
 
   const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const setCameraPreset = useDesignStore((s) => s.setCameraPreset)
@@ -323,6 +344,59 @@ export function TopToolbar({
         >
           <Redo2 className="h-4 w-4" />
         </button>
+
+        {/* قائمة تصدير صورة PNG عالية الجودة */}
+        <div className="relative" ref={exportMenuRef}>
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={() => setExportMenuOpen((v) => !v)}
+            className="flex h-11 items-center gap-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 px-3 text-xs font-bold text-sky-200 transition hover:bg-sky-500/25 active:scale-[0.98] disabled:opacity-50 sm:text-sm"
+            title="تصدير لقطة 3D عالية الجودة (PNG)"
+          >
+            <ImageDown className="h-4 w-4 text-sky-300" />
+            <span className="hidden md:inline">تصدير صورة</span>
+            <ChevronDown className="h-3.5 w-3.5 text-sky-300/80" />
+          </button>
+
+          {exportMenuOpen && (
+            <div className="absolute left-0 top-12 z-50 w-60 rounded-2xl border border-slate-700 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-md">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  triggerExportImage('clean')
+                }}
+                className="flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-right text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+              >
+                <Camera className="h-4 w-4 shrink-0 text-sky-400" />
+                <div>
+                  <div>صورة بخلفية نظيفة</div>
+                  <div className="text-[10px] font-normal text-slate-400">
+                    خلفية استوديو فاتحة بدون شبكة
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExportMenuOpen(false)
+                  triggerExportImage('transparent')
+                }}
+                className="mt-1 flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-right text-xs font-bold text-slate-100 transition hover:bg-slate-800"
+              >
+                <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+                <div>
+                  <div>صورة بخلفية شفافة (PNG)</div>
+                  <div className="text-[10px] font-normal text-slate-400">
+                    جاهزة للتركيب في التصميمات
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           type="button"

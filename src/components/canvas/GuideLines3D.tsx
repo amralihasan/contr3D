@@ -80,6 +80,7 @@ export function GuideLines3D() {
   const guidesVisible = useDesignStore((s) => s.guidesVisible)
   const selectedGuideId = useDesignStore((s) => s.selectedGuideId)
   const selectGuide = useDesignStore((s) => s.selectGuide)
+  const isExporting = useDesignStore((s) => s.isExporting)
 
   const toolMode = useDesignStore((s) => s.toolMode)
   const tapeMode = useDesignStore((s) => s.tapeMode)
@@ -120,6 +121,8 @@ export function GuideLines3D() {
         (activeReferenceEdge.edgeStart[2] + activeReferenceEdge.edgeEnd[2]) / 2,
       ]
     : null
+
+  if (isExporting) return null
 
   return (
     <group>

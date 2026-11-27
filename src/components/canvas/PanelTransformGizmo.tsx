@@ -18,6 +18,7 @@ interface PanelTransformGizmoProps {
 export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps) {
   const selectedPanelId = useDesignStore((s) => s.selectedPanelId)
   const toolMode = useDesignStore((s) => s.toolMode)
+  const isExporting = useDesignStore((s) => s.isExporting)
   const snappingEnabled = useDesignStore((s) => s.snappingEnabled)
   const beginTransformDrag = useDesignStore((s) => s.beginTransformDrag)
   const setSnapFeedback = useDesignStore((s) => s.setSnapFeedback)
@@ -89,7 +90,7 @@ export function PanelTransformGizmo({ selectedObject }: PanelTransformGizmoProps
     endTransformDrag({ id, position: finalPosition })
   }, [selectedObject, endTransformDrag])
 
-  if (!selectedObject || !selectedPanelId || toolMode !== 'select') return null
+  if (!selectedObject || !selectedPanelId || toolMode !== 'select' || isExporting) return null
 
   return (
     <TransformControls

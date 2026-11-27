@@ -25,7 +25,10 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
   const selectPanel = useDesignStore((s) => s.selectPanel)
   const interfacesOpen = useDesignStore((s) => s.interfacesOpen)
   const isSelected = useDesignStore(
-    (s) => s.toolMode === 'select' && s.selectedPanelIds.includes(panel.id)
+    (s) =>
+      !s.isExporting &&
+      s.toolMode === 'select' &&
+      s.selectedPanelIds.includes(panel.id)
   )
 
   const matSpec = MATERIALS[panel.materialId]

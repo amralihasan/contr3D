@@ -197,6 +197,9 @@ interface DesignState {
   humanScalePreset: HumanScalePreset
   humanPosition: [number, number]
   isDraggingHuman: boolean
+  isExporting: boolean
+  exportMode: 'clean' | 'transparent' | null
+  exportRequestTick: number
   statusToast: string | null
 
   cameraPreset: CameraPreset
@@ -238,6 +241,8 @@ interface DesignState {
   setHumanScalePreset: (preset: HumanScalePreset) => void
   setHumanPosition: (x: number, z: number) => void
   setIsDraggingHuman: (dragging: boolean) => void
+  triggerExportImage: (mode: 'clean' | 'transparent') => void
+  finishExportImage: (success: boolean) => void
   clearStatusToast: () => void
 
   // Panel CRUD & Clipboard
@@ -328,6 +333,9 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   humanScalePreset: 'adult',
   humanPosition: [-95, 0],
   isDraggingHuman: false,
+  isExporting: false,
+  exportMode: null,
+  exportRequestTick: 0,
   statusToast: null,
 
   cameraPreset: 'perspective',
@@ -571,6 +579,20 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   setHumanPosition: (x, z) => set({ humanPosition: [x, z] }),
 
   setIsDraggingHuman: (dragging) => set({ isDraggingHuman: dragging }),
+
+  triggerExportImage: (mode) =>
+    set((state) => ({
+      isExporting: true,
+      exportMode: mode,
+      exportRequestTick: state.exportRequestTick + 1,
+    })),
+
+  finishExportImage: (success) =>
+    set({
+      isExporting: false,
+      exportMode: null,
+      statusToast: success ? 'تم حفظ الصورة بنجاح' : 'تعذر تصدير الصورة',
+    }),
 
   clearStatusToast: () => set({ statusToast: null }),
 
