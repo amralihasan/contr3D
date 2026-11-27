@@ -1,4 +1,3 @@
-import { Html } from '@react-three/drei'
 import { useMemo } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
 import { isInterfaceRole, isLegOrBaseRole, type FurniturePanel } from '../../types/furniture'
@@ -31,12 +30,10 @@ export function SelectedDimensionTip() {
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const interfacesHidden = useDesignStore((s) => s.interfacesHidden)
   const isExporting = useDesignStore((s) => s.isExporting)
-  const toolMode = useDesignStore((s) => s.toolMode)
-  const isDraggingGizmo = useDesignStore((s) => s.isDraggingGizmo)
   const liveResizePreview = useDesignStore((s) => s.liveResizePreview)
 
   const tipData = useMemo(() => {
-    if (isExporting || toolMode !== 'select' || isDraggingGizmo || selectedPanelIds.length === 0) {
+    if (isExporting || selectedPanelIds.length === 0) {
       return null
     }
 
@@ -59,55 +56,34 @@ export function SelectedDimensionTip() {
 
     if (selectedPanels.length === 0) return null
 
-    const overall = computeOverallDimensions(selectedPanels)
-    if (!overall) return null
-
-    const centerX = (overall.minX + overall.maxX) / 2
-    const topY = overall.maxY + 4
-    const centerZ = (overall.minZ + overall.maxZ) / 2
-
     if (selectedPanels.length === 1) {
       const single = selectedPanels[0]
       return {
-        position: [centerX, topY, centerZ] as [number, number, number],
         title: single.name,
         dimensionsText: formatSinglePanelDimensions(single),
       }
     }
 
+    const overall = computeOverallDimensions(selectedPanels)
+    if (!overall) return null
+
     return {
-      position: [centerX, topY, centerZ] as [number, number, number],
       title: `${selectedPanels.length} قطع محددة`,
-      dimensionsText: `${formatCmValue(overall.width)} × ${formatCmValue(overall.height)} × ${formatCmValue(overall.depth)} سم`,
+      dimensionsText: `المقاس الإجمالي: ${formatCmValue(overall.width)} × ${formatCmValue(overall.height)} × ${formatCmValue(overall.depth)} سم`,
     }
-  }, [
-    panels,
-    selectedPanelIds,
-    interfacesHidden,
-    isExporting,
-    toolMode,
-    isDraggingGizmo,
-    liveResizePreview,
-  ])
+  }, [panels, selectedPanelIds, interfacesHidden, isExporting, liveResizePreview])
 
   if (!tipData) return null
 
   return (
-    <Html
-      position={tipData.position}
-      center
-      zIndexRange={[20, 0]}
-      style={{ pointerEvents: 'none' }}
+    <div
+      dir="rtl"
+      className="pointer-events-none absolute top-4 right-4 z-30 select-none rounded-xl border border-amber-400/50 bg-slate-900/90 px-3 py-1.5 text-right text-xs text-white shadow-lg backdrop-blur-md"
     >
-      <div
-        dir="rtl"
-        className="pointer-events-none select-none rounded-lg border border-amber-400/50 bg-slate-900/90 px-2.5 py-1 text-center text-xs text-white shadow-lg backdrop-blur-sm whitespace-nowrap"
-      >
-        <div className="font-semibold text-amber-300 leading-tight">{tipData.title}</div>
-        <div className="mt-0.5 text-[11px] font-medium text-slate-100 leading-tight">
-          {tipData.dimensionsText}
-        </div>
+      <div className="font-semibold leading-tight text-amber-300">{tipData.title}</div>
+      <div className="mt-0.5 font-medium leading-tight text-slate-100 tabular-nums">
+        {tipData.dimensionsText}
       </div>
-    </Html>
+    </div>
   )
 }

@@ -371,11 +371,11 @@ export function SceneCanvas() {
         <HumanReference />
         <TapeMeasureTool objectMap={objectMap} handlersRef={tapeHandlersRef} />
         <DimensionsOverlay3D />
-        <SelectedDimensionTip />
         <PanelTransformGizmo selectedObject={selectedObject} />
         <PanelResizeHandles selectedObject={selectedObject} />
         <ExportCaptureController />
       </Canvas>
+      <SelectedDimensionTip />
     </div>
   )
 }

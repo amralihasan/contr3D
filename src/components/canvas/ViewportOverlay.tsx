@@ -29,6 +29,8 @@ export function ViewportOverlay() {
     return () => clearTimeout(timer)
   }, [statusToast, clearStatusToast])
 
+  const isExporting = useDesignStore((s) => s.isExporting)
+  const hasVisibleSelectionTip = !isExporting && selectedPanelIds.length > 0
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
   const activeSnapAxes = [
     snapFeedback.x ? 'X' : null,
@@ -39,7 +41,11 @@ export function ViewportOverlay() {
   return (
     <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-wrap items-start justify-between gap-2">
       {/* مقياس الشبكة + حالة الالتصاق */}
-      <div className="flex flex-col items-start gap-1.5">
+      <div
+        className={`flex flex-col items-start gap-1.5 transition-[margin] duration-150 ${
+          hasVisibleSelectionTip ? 'mt-14' : ''
+        }`}
+      >
         <div className="rounded-xl border border-slate-700/60 bg-slate-900/75 px-2.5 py-1 text-[11px] font-semibold text-slate-300 backdrop-blur-md">
           المربع = 10 سم · الخطوة = 0.5 سم
         </div>
