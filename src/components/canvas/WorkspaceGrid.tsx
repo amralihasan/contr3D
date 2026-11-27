@@ -1,5 +1,52 @@
-import { Environment, Grid, Lightformer } from '@react-three/drei'
+import { Environment, Lightformer } from '@react-three/drei'
+import { useEffect, useRef } from 'react'
+import * as THREE from 'three'
 import { useDesignStore } from '../../store/useDesignStore'
+
+// منع التفاعل مع الماوس/اللمس حتى يمر النقر على الفراغ إلى Canvas onPointerMissed لإلغاء التحديد
+const noopRaycast: THREE.Object3D['raycast'] = () => {}
+
+function StaticFloorGrid() {
+  const minorGridRef = useRef<THREE.GridHelper | null>(null)
+  const majorGridRef = useRef<THREE.GridHelper | null>(null)
+
+  useEffect(() => {
+    const configureGridMaterial = (grid: THREE.GridHelper | null, opacity: number) => {
+      if (!grid) return
+      const materials = Array.isArray(grid.material) ? grid.material : [grid.material]
+      for (const mat of materials) {
+        mat.depthWrite = false
+        mat.transparent = true
+        mat.opacity = opacity
+        mat.needsUpdate = true
+      }
+    }
+
+    configureGridMaterial(minorGridRef.current, 0.42)
+    configureGridMaterial(majorGridRef.current, 0.72)
+  }, [])
+
+  return (
+    <group>
+      {/* شبكة القياس الدقيقة: كل 10 سم مربع */}
+      <gridHelper
+        ref={minorGridRef}
+        position={[0, 0.01, 0]}
+        args={[1000, 100, '#334155', '#293548']}
+        raycast={noopRaycast}
+        renderOrder={1}
+      />
+      {/* خطوط القياس الرئيسية: كل 50 سم */}
+      <gridHelper
+        ref={majorGridRef}
+        position={[0, 0.015, 0]}
+        args={[1000, 20, '#64748b', '#475569']}
+        raycast={noopRaycast}
+        renderOrder={2}
+      />
+    </group>
+  )
+}
 
 export function WorkspaceGrid() {
   const exportMode = useDesignStore((s) => s.exportMode)
@@ -7,6 +54,8 @@ export function WorkspaceGrid() {
   const isSketch = renderMode === 'sketch'
   const isCleanExport = exportMode === 'clean' || exportMode === 'three_angles'
   const isTransparentExport = exportMode === 'transparent'
+  const showSolidFloor = !isTransparentExport && !isSketch
+  const showGrid = !exportMode && !isSketch
 
   return (
     <>
@@ -17,11 +66,15 @@ export function WorkspaceGrid() {
           args={[isSketch ? '#ffffff' : isCleanExport ? '#f1f5f9' : '#0f172a']}
         />
       )}
-      {!exportMode && !isSketch && <fog attach="fog" args={['#0f172a', 380, 760]} />}
+      {!exportMode && !isSketch && <fog attach="fog" args={['#0f172a', 420, 880]} />}
 
       <ambientLight intensity={isSketch ? 0.72 : isCleanExport ? 0.55 : 0.45} />
       <hemisphereLight
-        args={['#f8fafc', isSketch ? '#cbd5e1' : '#1e293b', isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55]}
+        args={[
+          '#f8fafc',
+          isSketch ? '#cbd5e1' : '#1e293b',
+          isSketch ? 0.5 : isCleanExport ? 0.65 : 0.55,
+        ]}
       />
 
       <directionalLight
@@ -38,7 +91,11 @@ export function WorkspaceGrid() {
         shadow-camera-bottom={-220}
       />
 
-      <directionalLight position={[-140, 110, -120]} intensity={isSketch ? 0.35 : 0.4} color="#cbd5e1" />
+      <directionalLight
+        position={[-140, 110, -120]}
+        intensity={isSketch ? 0.35 : 0.4}
+        color="#cbd5e1"
+      />
 
       {/* بيئة إضاءة محلية بدون تحميل ملفات خارجية */}
       <Environment resolution={256}>
@@ -67,33 +124,38 @@ export function WorkspaceGrid() {
         </group>
       </Environment>
 
-      {/* أرضية استقبال الظلال (مخفية في وضع الرسم الهندسي لورقة بيضاء نقية) */}
-      {!isSketch && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-          <planeGeometry args={[1200, 1200]} />
-          <shadowMaterial
-            transparent
-            opacity={isCleanExport ? 0.18 : isTransparentExport ? 0.24 : 0.34}
+      {/* أرضية مصمتة وواسعة غير لامعة تستقبل الظلال بثبات بدون وميض */}
+      {showSolidFloor && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -0.04, 0]}
+          receiveShadow
+          raycast={noopRaycast}
+        >
+          <planeGeometry args={[2400, 2400]} />
+          <meshStandardMaterial
+            color={isCleanExport ? '#f1f5f9' : '#131b2e'}
+            roughness={0.95}
+            metalness={0}
           />
         </mesh>
       )}
 
-      {/* إخفاء الشبكة الأرضية مؤقتاً أثناء تصدير الصورة أو الرسم الهندسي */}
-      {!exportMode && !isSketch && (
-        <Grid
-          position={[0, 0.01, 0]}
-          args={[600, 600]}
-          cellSize={10}
-          cellThickness={0.75}
-          cellColor="#334155"
-          sectionSize={50}
-          sectionThickness={1.35}
-          sectionColor="#64748b"
-          fadeDistance={480}
-          fadeStrength={1.25}
-          infiniteGrid
-        />
+      {/* ظل خفيف فقط عند التصدير الشفاف بدون خلفية مصمتة */}
+      {isTransparentExport && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -0.02, 0]}
+          receiveShadow
+          raycast={noopRaycast}
+        >
+          <planeGeometry args={[1200, 1200]} />
+          <shadowMaterial transparent opacity={0.24} />
+        </mesh>
       )}
+
+      {/* شبكة قياس ثابتة فوق الأرضية بدون تلاشي مفاجئ أو Z-Fighting */}
+      {showGrid && <StaticFloorGrid />}
     </>
   )
 }

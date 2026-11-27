@@ -17,6 +17,7 @@ export function CameraRig() {
   const isDraggingHuman = useDesignStore((s) => s.isDraggingHuman)
 
   const animatingRef = useRef(false)
+  const animElapsedRef = useRef(0)
   const desiredPosRef = useRef(new THREE.Vector3(...CAMERA_PRESETS.perspective.position))
   const desiredTargetRef = useRef(new THREE.Vector3(...CAMERA_PRESETS.perspective.target))
 
@@ -25,29 +26,45 @@ export function CameraRig() {
     const cfg = CAMERA_PRESETS[cameraPreset]
     desiredPosRef.current.set(...cfg.position)
     desiredTargetRef.current.set(...cfg.target)
+    animElapsedRef.current = 0
     animatingRef.current = true
   }, [cameraPreset, cameraRequestTick])
 
   useFrame((_, delta) => {
-    if (!animatingRef.current || !controlsRef.current) return
-    const alpha = Math.min(1, delta * 9)
-    camera.position.lerp(desiredPosRef.current, alpha)
-    controlsRef.current.target.lerp(desiredTargetRef.current, alpha)
-    controlsRef.current.update()
+    const controls = controlsRef.current
+    if (!controls) return
 
-    if (
-      camera.position.distanceTo(desiredPosRef.current) < 0.35 &&
-      controlsRef.current.target.distanceTo(desiredTargetRef.current) < 0.35
-    ) {
-      camera.position.copy(desiredPosRef.current)
-      controlsRef.current.target.copy(desiredTargetRef.current)
-      controlsRef.current.update()
-      animatingRef.current = false
+    if (animatingRef.current) {
+      animElapsedRef.current += delta
+      const alpha = Math.min(1, delta * 9)
+      camera.position.lerp(desiredPosRef.current, alpha)
+      controls.target.lerp(desiredTargetRef.current, alpha)
+      controls.update()
+
+      const reachedTarget =
+        camera.position.distanceTo(desiredPosRef.current) < 0.35 &&
+        controls.target.distanceTo(desiredTargetRef.current) < 0.35
+
+      if (reachedTarget || animElapsedRef.current >= 0.85) {
+        if (reachedTarget) {
+          camera.position.copy(desiredPosRef.current)
+          controls.target.copy(desiredTargetRef.current)
+        }
+        controls.update()
+        animatingRef.current = false
+      }
+    }
+
+    // منع هدف الكاميرا أو الكاميرا نفسها من النزول تحت مستوى الأرضية عند التحريك (Pan)
+    if (controls.target.y < 0 || camera.position.y < 1) {
+      if (controls.target.y < 0) controls.target.setY(0)
+      if (camera.position.y < 1) camera.position.setY(1)
+      controls.update()
     }
   })
 
   return (
-      <OrbitControls
+    <OrbitControls
       ref={controlsRef}
       makeDefault
       enabled={!isDraggingGizmo && !isDraggingTape && !isDraggingHuman}
@@ -58,7 +75,7 @@ export function CameraRig() {
       panSpeed={0.85}
       minDistance={25}
       maxDistance={560}
-      maxPolarAngle={Math.PI / 2 - 0.015}
+      maxPolarAngle={Math.PI / 2 - 0.03}
       target={[0, 40, 0]}
       touches={{
         ONE: THREE.TOUCH.ROTATE,
