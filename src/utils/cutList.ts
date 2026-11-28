@@ -81,6 +81,7 @@ const ROLE_LABELS: Record<PanelRole, string> = {
   plinth_recessed: 'سوكلة خشب غاطسة',
   wood_legs: 'طقم 4 رجول خشب مايلة',
   metal_legs: 'طقم 4 رجول معدن مستقيمة',
+  tv_short_legs: 'طقم رجول تليفزيون قصيرة',
   metal_frame: 'شاسيه معدن مستطيل',
   metal_u_legs: 'رجول معدن حرف U',
   metal_x_legs: 'قاعدة معدن حرف X',
@@ -90,6 +91,7 @@ const ROLE_LABELS: Record<PanelRole, string> = {
 }
 
 const METAL_COLOR_LABELS: Record<MetalBaseColor, string> = {
+  silver: 'فضي / ستانلس',
   matte_black: 'أسود مط',
   gold: 'ذهبي',
   matte_white: 'أبيض مط',
@@ -215,6 +217,7 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
     if (
       panel.role === 'wood_legs' ||
       panel.role === 'metal_legs' ||
+      panel.role === 'tv_short_legs' ||
       panel.role === 'metal_frame' ||
       panel.role === 'metal_u_legs' ||
       panel.role === 'metal_x_legs' ||
@@ -222,13 +225,23 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
     ) {
       const isMetal =
         panel.role === 'metal_legs' ||
+        panel.role === 'tv_short_legs' ||
         panel.role === 'metal_frame' ||
         panel.role === 'metal_u_legs' ||
         panel.role === 'metal_x_legs'
+      const defaultMetal: MetalBaseColor =
+        panel.role === 'tv_short_legs' ? 'silver' : 'matte_black'
       const matLabel = isMetal
-        ? METAL_COLOR_LABELS[panel.metalColor ?? 'matte_black']
+        ? METAL_COLOR_LABELS[panel.metalColor ?? defaultMetal]
         : MATERIALS[panel.materialId].label
-      const dimLabel = `${panel.dimensions.width} × ${panel.dimensions.height} × ${panel.dimensions.depth} سم`
+
+      let dimLabel = `${panel.dimensions.width} × ${panel.dimensions.height} × ${panel.dimensions.depth} سم`
+      if (panel.role === 'tv_short_legs') {
+        const legCount = panel.dimensions.width >= 140 ? 6 : 4
+        const hLabel = roundTo(panel.dimensions.height, 1)
+        dimLabel = `${legCount} قطع — ارتفاع ${hLabel} سم (${roundTo(panel.dimensions.width, 1)}×${roundTo(panel.dimensions.depth, 1)} سم)`
+      }
+
       const hwKey = `${panel.role}|${dimLabel}|${matLabel}`
       const existing = hardwareMap.get(hwKey)
       if (existing) {

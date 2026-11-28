@@ -61,10 +61,14 @@ function AddPartModalForm({
   const [depthInput, setDepthInput] = useState(String(preset.dimensions.depth))
   const [quantity, setQuantity] = useState(1)
 
-  const parseDim = (raw: string, fallback: number) => {
+  const isTvShortLegs = preset.role === 'tv_short_legs'
+  const minHeightCm = isTvShortLegs ? 2 : MIN_PANEL_DIM_CM
+  const maxHeightCm = isTvShortLegs ? 15 : MAX_PANEL_DIM_CM
+
+  const parseDim = (raw: string, fallback: number, minVal = MIN_PANEL_DIM_CM, maxVal = MAX_PANEL_DIM_CM) => {
     const val = Number.parseFloat(raw)
     if (!Number.isFinite(val)) return fallback
-    return roundTo(Math.min(MAX_PANEL_DIM_CM, Math.max(MIN_PANEL_DIM_CM, val)), 2)
+    return roundTo(Math.min(maxVal, Math.max(minVal, val)), 2)
   }
 
   const showThicknessQuickButtons =
@@ -94,7 +98,7 @@ function AddPartModalForm({
     e.preventDefault()
     const dims: PanelDimensions = {
       width: parseDim(widthInput, preset.dimensions.width),
-      height: parseDim(heightInput, preset.dimensions.height),
+      height: parseDim(heightInput, preset.dimensions.height, minHeightCm, maxHeightCm),
       depth: parseDim(depthInput, preset.dimensions.depth),
     }
     const safeQty = Math.min(20, Math.max(1, Math.round(quantity)))
@@ -166,8 +170,8 @@ function AddPartModalForm({
             id="add-part-height"
             type="number"
             step="0.1"
-            min={MIN_PANEL_DIM_CM}
-            max={MAX_PANEL_DIM_CM}
+            min={minHeightCm}
+            max={maxHeightCm}
             onFocus={(e) => e.currentTarget.select()}
             value={heightInput}
             onChange={(e) => setHeightInput(e.target.value)}
@@ -215,6 +219,32 @@ function AddPartModalForm({
                   }`}
                 >
                   {tp.cm} سم ({tp.label})
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* أزرار الارتفاع السريعة لرجول التليفزيون القصيرة (2 إلى 15 سم) */}
+      {isTvShortLegs && (
+        <div className="mt-3.5 flex items-center justify-between gap-2 rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+          <span className="text-xs font-bold text-slate-300">ارتفاع الرجل (2–15 سم):</span>
+          <div className="flex items-center gap-1.5">
+            {[3, 5, 8, 12].map((h) => {
+              const active = Math.abs(Number.parseFloat(heightInput) - h) < 0.05
+              return (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setHeightInput(String(h))}
+                  className={`h-9 rounded-xl border px-2.5 text-xs font-bold transition ${
+                    active
+                      ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                      : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {h} سم
                 </button>
               )
             })}

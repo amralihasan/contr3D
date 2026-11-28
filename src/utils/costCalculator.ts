@@ -96,6 +96,7 @@ export function computeCostEstimate(
     } else if (
       panel.role === 'wood_legs' ||
       panel.role === 'metal_legs' ||
+      panel.role === 'tv_short_legs' ||
       panel.role === 'metal_frame' ||
       panel.role === 'metal_u_legs' ||
       panel.role === 'metal_x_legs' ||

@@ -229,6 +229,7 @@ export function sanitizePanel(raw: unknown): FurniturePanel | null {
     panel.hasMirror = obj.hasMirror
   }
   if (
+    obj.metalColor === 'silver' ||
     obj.metalColor === 'matte_black' ||
     obj.metalColor === 'gold' ||
     obj.metalColor === 'matte_white' ||

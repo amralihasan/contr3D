@@ -186,6 +186,18 @@ export const BASE_PRESETS: PanelPreset[] = [
     metalColor: 'matte_black',
   },
   {
+    role: 'tv_short_legs',
+    category: 'base',
+    label: 'رجول تليفزيون قصيرة',
+    shortLabel: 'رجول تليفزيون',
+    subtitle: '120 × 35 سم · ارتفاع 5 سم (قُطر 4.5 سم)',
+    dimensions: { width: 120, height: 5, depth: 35 },
+    thicknessAxis: 'y',
+    defaultMaterial: 'grey',
+    defaultPosition: [0, 2.5, 0],
+    metalColor: 'silver',
+  },
+  {
     role: 'plinth_recessed',
     category: 'base',
     label: 'سوكلة خشب غاطسة للدواليب',

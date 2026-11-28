@@ -193,6 +193,7 @@ const HANDLE_COLOR_OPTIONS: { color: HandleColor; label: string; swatch: string 
 const HANDLE_LENGTH_PRESETS = [12, 16, 20, 32] as const
 
 const METAL_COLOR_OPTIONS: { color: MetalBaseColor; label: string; swatch: string }[] = [
+  { color: 'silver', label: 'فضي / ستانلس', swatch: '#cbd5e1' },
   { color: 'matte_black', label: 'أسود مط', swatch: '#18181b' },
   { color: 'gold', label: 'ذهبي', swatch: '#d4af37' },
   { color: 'matte_white', label: 'أبيض مط', swatch: '#f8fafc' },
@@ -469,24 +470,34 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
             )}
 
             {isBaseOrLeg && (
-              <div className="grid grid-cols-4 gap-1">
-                {[10, 18, 40, 73].map((h) => {
-                  const active = Math.abs(panel.dimensions.height - h) < 0.05
-                  return (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => updatePanelDimension(panel.id, 'height', h)}
-                      className={`h-9 rounded-xl border text-[11px] font-bold transition ${
-                        active
-                          ? 'border-amber-500 bg-amber-500/20 text-amber-200'
-                          : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      {h} سم
-                    </button>
-                  )
-                })}
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-4 gap-1">
+                  {(panel.role === 'tv_short_legs' ? [3, 5, 8, 12] : [10, 18, 40, 73]).map((h) => {
+                    const active = Math.abs(panel.dimensions.height - h) < 0.05
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => updatePanelDimension(panel.id, 'height', h)}
+                        className={`h-9 rounded-xl border text-[11px] font-bold transition ${
+                          active
+                            ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                            : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        {h} سم
+                      </button>
+                    )
+                  })}
+                </div>
+                {panel.role === 'tv_short_legs' && (
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+                    عدد الرجول التلقائي:{' '}
+                    <span className="font-extrabold text-amber-300">
+                      {panel.dimensions.width >= 140 ? '6 رجول (دعم أوسط)' : '4 رجول'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -500,6 +511,8 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
               label="الارتفاع"
               axisLabel="Y"
               value={panel.dimensions.height}
+              min={panel.role === 'tv_short_legs' ? 2 : MIN_PANEL_DIM_CM}
+              max={panel.role === 'tv_short_legs' ? 15 : MAX_PANEL_DIM_CM}
               onChange={(v) => updatePanelDimension(panel.id, 'height', v)}
             />
             <DimensionControl
@@ -790,7 +803,8 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
           {isMetalBase ? (
             <div className="grid grid-cols-1 gap-1.5">
               {METAL_COLOR_OPTIONS.map((opt) => {
-                const active = (panel.metalColor ?? 'matte_black') === opt.color
+                const defaultColor = panel.role === 'tv_short_legs' ? 'silver' : 'matte_black'
+                const active = (panel.metalColor ?? defaultColor) === opt.color
                 return (
                   <button
                     key={opt.color}

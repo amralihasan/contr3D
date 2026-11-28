@@ -205,6 +205,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     wood_pillars: 10,
     wood_arch: 10,
     metal_legs: 11,
+    tv_short_legs: 11,
     metal_frame: 11,
     metal_u_legs: 11,
     metal_x_legs: 11,

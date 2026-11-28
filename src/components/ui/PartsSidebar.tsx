@@ -62,6 +62,7 @@ function getPresetIcon(preset: PanelPreset) {
     case 'plinth_recessed':
     case 'wood_legs':
     case 'metal_legs':
+    case 'tv_short_legs':
     case 'metal_frame':
     case 'metal_u_legs':
     case 'metal_x_legs':

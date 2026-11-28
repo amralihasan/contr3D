@@ -1118,7 +1118,10 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const target = panels.find((p) => p.id === id)
     if (!target) return
 
-    const clamped = clampDim(value)
+    const clamped =
+      target.role === 'tv_short_legs' && key === 'height'
+        ? roundTo(Math.min(15, Math.max(2, Number.isFinite(value) ? value : 5)), 2)
+        : clampDim(value)
     if (target.dimensions[key] === clamped) return
 
     const nextPanels = panels.map((p) => {

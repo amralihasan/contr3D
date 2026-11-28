@@ -13,6 +13,7 @@ export type PanelRole =
   | 'plinth_recessed'
   | 'wood_legs'
   | 'metal_legs'
+  | 'tv_short_legs'
   | 'metal_frame'
   | 'metal_u_legs'
   | 'metal_x_legs'
@@ -20,7 +21,7 @@ export type PanelRole =
   | 'wood_arch'
   | 'custom'
 
-export type MetalBaseColor = 'matte_black' | 'gold' | 'matte_white' | 'anthracite'
+export type MetalBaseColor = 'silver' | 'matte_black' | 'gold' | 'matte_white' | 'anthracite'
 
 export type MaterialId =
   | 'white'
@@ -247,6 +248,7 @@ export function isLegOrBaseRole(role: PanelRole): boolean {
     role === 'plinth_recessed' ||
     role === 'wood_legs' ||
     role === 'metal_legs' ||
+    role === 'tv_short_legs' ||
     role === 'metal_frame' ||
     role === 'metal_u_legs' ||
     role === 'metal_x_legs' ||
@@ -258,6 +260,7 @@ export function isLegOrBaseRole(role: PanelRole): boolean {
 export function isMetalBaseRole(role: PanelRole): boolean {
   return (
     role === 'metal_legs' ||
+    role === 'tv_short_legs' ||
     role === 'metal_frame' ||
     role === 'metal_u_legs' ||
     role === 'metal_x_legs'
@@ -273,6 +276,7 @@ export function getDefaultEdgeBanding(role: PanelRole): EdgeBanding {
     case 'back':
     case 'wood_legs':
     case 'metal_legs':
+    case 'tv_short_legs':
     case 'metal_frame':
     case 'metal_u_legs':
     case 'metal_x_legs':

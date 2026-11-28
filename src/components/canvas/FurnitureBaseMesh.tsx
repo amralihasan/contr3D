@@ -22,6 +22,7 @@ interface FurnitureBaseMeshProps {
 }
 
 const METAL_COLOR_HEX: Record<MetalBaseColor, string> = {
+  silver: '#cbd5e1',
   matte_black: '#18181b',
   gold: '#d4af37',
   matte_white: '#f8fafc',
@@ -128,11 +129,13 @@ export function FurnitureBaseMesh({
 
   const metalHex = panel.metalColor
     ? METAL_COLOR_HEX[panel.metalColor]
-    : panel.role === 'metal_legs'
-      ? isWhiteStudio
-        ? '#94a3b8'
-        : woodColor
-      : METAL_COLOR_HEX.matte_black
+    : panel.role === 'tv_short_legs'
+      ? METAL_COLOR_HEX.silver
+      : panel.role === 'metal_legs'
+        ? isWhiteStudio
+          ? '#94a3b8'
+          : woodColor
+        : METAL_COLOR_HEX.matte_black
 
   const metalMatProps = isSketch
     ? {
@@ -322,6 +325,85 @@ export function FurnitureBaseMesh({
               <meshStandardMaterial
                 color={isSketch ? '#f8fafc' : '#0f172a'}
                 roughness={isSketch ? 0.9 : 0.8}
+              />
+              {sketchSubEdges}
+            </mesh>
+          </group>
+        ))}
+        {selectionOutline}
+      </group>
+    )
+  }
+
+  // 3ب. رجول تليفزيون قصيرة معدنية بقاعدة كاوتش سوداء (4 أو 6 رجول تلقائياً عند العرض >= 140 سم)
+  if (panel.role === 'tv_short_legs') {
+    const legRadius = 2.25 // قُطر ثابت 4.5 سم بدون تشويه عند تمديد العرض أو العمق
+    const rubberH = Math.min(0.5, height * 0.25)
+    const metalH = Math.max(0.5, height - rubberH)
+    const insetX = Math.max(legRadius, width / 2 - 4)
+    const insetZ = Math.max(legRadius, depth / 2 - 4)
+
+    const positions: [number, number][] = [
+      [-insetX, -insetZ],
+      [insetX, -insetZ],
+      [-insetX, insetZ],
+      [insetX, insetZ],
+    ]
+    if (width >= 140) {
+      positions.push([0, -insetZ], [0, insetZ])
+    }
+
+    const shinyMetalProps = isSketch
+      ? metalMatProps
+      : {
+          color: metalHex,
+          metalness: 0.8,
+          roughness: 0.25,
+          polygonOffset: true,
+          polygonOffsetFactor: polyOffset,
+          polygonOffsetUnits: polyOffset,
+        }
+
+    return (
+      <group>
+        {positions.map(([cx, cz], idx) => (
+          <group key={idx} position={[cx, 0, cz]}>
+            {/* جسم الرجل المعدني الأسطواني */}
+            <mesh
+              position={[0, rubberH / 2, 0]}
+              castShadow
+              receiveShadow
+              onClick={onClick}
+            >
+              <cylinderGeometry args={[legRadius, legRadius, metalH, 24]} />
+              <meshStandardMaterial
+                key={isSketch ? 'sketch-tv-leg' : `tv-leg-${metalHex}`}
+                {...shinyMetalProps}
+              />
+              <Edges
+                threshold={24}
+                color={edgeColor}
+                lineWidth={edgeWidth}
+                transparent
+                opacity={edgeOpacity}
+              />
+            </mesh>
+
+            {/* قاعدة كاوتش سوداء رفيعة أسفل الرجل تلامس الأرضية Y = 0 */}
+            <mesh
+              position={[0, -height / 2 + rubberH / 2, 0]}
+              castShadow
+              receiveShadow
+              onClick={onClick}
+            >
+              <cylinderGeometry args={[legRadius, legRadius + 0.05, rubberH, 24]} />
+              <meshStandardMaterial
+                color={isSketch ? '#f8fafc' : '#0f172a'}
+                roughness={isSketch ? 0.9 : 0.88}
+                metalness={isSketch ? 0 : 0.05}
+                polygonOffset
+                polygonOffsetFactor={polyOffset}
+                polygonOffsetUnits={polyOffset}
               />
               {sketchSubEdges}
             </mesh>

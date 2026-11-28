@@ -171,6 +171,8 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
     return ALL_FACE_HANDLES.filter((f) => f.axis !== panel.thicknessAxis)
   }, [panel])
 
+  const panelRole = panel?.role
+
   useEffect(() => {
     if (!draggingId) return
 
@@ -219,9 +221,13 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
       const hit = new THREE.Vector3()
       if (!raycasterRef.current.ray.intersectPlane(drag.dragPlane, hit)) return
 
+      const isShortTvLegsY = panelRole === 'tv_short_legs' && drag.face.axis === 'y'
+      const minDimLimit = isShortTvLegsY ? 2 : MIN_RESIZE_CM
+      const maxDimLimit = isShortTvLegsY ? 15 : MAX_PANEL_DIM_CM
+
       const rawDelta = hit.sub(drag.startHitPoint).dot(drag.worldDir)
       const startDim = drag.startDims[drag.face.dimKey]
-      let newDim = Math.max(MIN_RESIZE_CM, Math.min(MAX_PANEL_DIM_CM, startDim + rawDelta))
+      let newDim = Math.max(minDimLimit, Math.min(maxDimLimit, startDim + rawDelta))
 
       const feedback: SnapFeedback = { x: false, y: false, z: false, floor: false, guide: false }
 
@@ -301,7 +307,7 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
         }
       }
 
-      newDim = roundTo(Math.max(MIN_RESIZE_CM, Math.min(MAX_PANEL_DIM_CM, newDim)), 2)
+      newDim = roundTo(Math.max(minDimLimit, Math.min(maxDimLimit, newDim)), 2)
 
       const appliedDelta = newDim - startDim
       const nextDims: PanelDimensions = {
@@ -359,6 +365,7 @@ export function PanelResizeHandles({ selectedObject }: PanelResizeHandlesProps) 
     }
   }, [
     draggingId,
+    panelRole,
     camera,
     gl,
     get,
