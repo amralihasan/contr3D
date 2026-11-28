@@ -328,7 +328,11 @@ interface DesignState {
   // Gizmo transform lifecycle
   beginTransformDrag: () => void
   setSnapFeedback: (feedback: SnapFeedback) => void
-  endTransformDrag: (finalMove?: { id: string; position: Vec3 }) => void
+  endTransformDrag: (
+    finalMoves?:
+      | { id: string; position: Vec3 }
+      | { id: string; position: Vec3 }[]
+  ) => void
   beginResizeDrag: () => void
   setLiveResizePreview: (
     preview: { id: string; dimensions: PanelDimensions; position: Vec3 } | null
@@ -1623,11 +1627,22 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     set({ snapFeedback: feedback })
   },
 
-  endTransformDrag: (finalMove) => {
+  endTransformDrag: (finalMoves) => {
     const { dragSnapshot, panels, guides, past, currentDesignName, currentDesignId } = get()
-    const nextPanels = finalMove
-      ? panels.map((p) => (p.id === finalMove.id ? { ...p, position: finalMove.position } : p))
-      : panels
+    const movesList = !finalMoves
+      ? []
+      : Array.isArray(finalMoves)
+        ? finalMoves
+        : [finalMoves]
+    const moveMap = new Map<string, Vec3>(movesList.map((m) => [m.id, m.position]))
+
+    const nextPanels =
+      moveMap.size > 0
+        ? panels.map((p) => {
+            const nextPos = moveMap.get(p.id)
+            return nextPos ? { ...p, position: nextPos } : p
+          })
+        : panels
 
     const changed =
       dragSnapshot !== null &&
