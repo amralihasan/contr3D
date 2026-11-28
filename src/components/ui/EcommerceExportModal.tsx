@@ -8,6 +8,7 @@ import {
   type EcommerceCaptureSnapshot,
 } from '../../utils/ecommerceExport'
 import { EcommerceDimensionLines } from '../canvas/EcommerceDimensionLines'
+import { DimensionPlacementControls } from './DimensionPlacementControls'
 
 interface EcommerceExportModalProps {
   open: boolean
@@ -37,6 +38,8 @@ function buildEcommerceFilename(designName: string): string {
 function EcommerceExportModalContent({ onClose }: { onClose: () => void }) {
   const panelsCount = useDesignStore((s) => s.panels.length)
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
+  const dimensionPlacement = useDesignStore((s) => s.dimensionPlacement)
+  const setDimensionPlacement = useDesignStore((s) => s.setDimensionPlacement)
 
   const [whitePiece, setWhitePiece] = useState(false)
   const [showInternalDimensions, setShowInternalDimensions] = useState(false)
@@ -71,7 +74,11 @@ function EcommerceExportModalContent({ onClose }: { onClose: () => void }) {
 
   const handleDownload = () => {
     if (!snapshot) return
-    const dataUrl = composeEcommerceProductPng(snapshot, showInternalDimensions)
+    const dataUrl = composeEcommerceProductPng(
+      snapshot,
+      showInternalDimensions,
+      dimensionPlacement
+    )
     const link = document.createElement('a')
     link.href = dataUrl
     link.download = buildEcommerceFilename(currentDesignName)
@@ -128,6 +135,7 @@ function EcommerceExportModalContent({ onClose }: { onClose: () => void }) {
                 <EcommerceDimensionLines
                   snapshot={snapshot}
                   showInternalDimensions={showInternalDimensions}
+                  dimensionPlacement={dimensionPlacement}
                 />
                 {capturing && (
                   <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-950/35 text-xs font-bold text-white backdrop-blur-[1px]">
@@ -203,6 +211,19 @@ function EcommerceExportModalContent({ onClose }: { onClose: () => void }) {
                       <RefreshCw className={`h-3.5 w-3.5 ${capturing ? 'animate-spin' : ''}`} />
                       <span>تحديث</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* التحكم في مواضع خطوط المقاسات الكلية */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 md:col-span-2">
+                  <div className="mb-2 text-xs font-extrabold text-sky-300">
+                    تغيير مواضع خطوط المقاسات الكلية (تحديث فوري للمعاينة)
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4 [&>div]:contents">
+                    <DimensionPlacementControls
+                      placement={dimensionPlacement}
+                      onChange={setDimensionPlacement}
+                    />
                   </div>
                 </div>
               </div>

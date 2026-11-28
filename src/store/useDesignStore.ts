@@ -17,6 +17,7 @@ import {
   type CameraPreset,
   type CornerRadius,
   type CustomTemplate,
+  type DimensionPlacement,
   type EdgeBanding,
   type EdgeSide,
   type FurniturePanel,
@@ -223,6 +224,7 @@ interface DesignState {
   interfacesOpen: boolean
   interfacesHidden: boolean
   showDimensions: boolean
+  dimensionPlacement: DimensionPlacement
   showHumanReference: boolean
   humanScalePreset: HumanScalePreset
   humanPosition: [number, number]
@@ -284,6 +286,7 @@ interface DesignState {
   toggleInterfacesOpen: () => void
   toggleInterfacesHidden: () => void
   toggleShowDimensions: () => void
+  setDimensionPlacement: (patch: Partial<DimensionPlacement>) => void
   toggleHumanReference: () => void
   setHumanScalePreset: (preset: HumanScalePreset) => void
   setHumanPosition: (x: number, z: number) => void
@@ -479,6 +482,11 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   interfacesOpen: false,
   interfacesHidden: false,
   showDimensions: true,
+  dimensionPlacement: {
+    heightSide: 'left',
+    widthSide: 'front',
+    depthSide: 'right',
+  },
   showHumanReference: false,
   humanScalePreset: 'adult',
   humanPosition: [-95, 0],
@@ -845,6 +853,11 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   toggleShowDimensions: () =>
     set((state) => ({ showDimensions: !state.showDimensions })),
+
+  setDimensionPlacement: (patch) =>
+    set((state) => ({
+      dimensionPlacement: { ...state.dimensionPlacement, ...patch },
+    })),
 
   toggleHumanReference: () =>
     set((state) => ({ showHumanReference: !state.showHumanReference })),

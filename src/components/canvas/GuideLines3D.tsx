@@ -92,9 +92,9 @@ function SingleGuide({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <Html position={guide.labelPosition} center distanceFactor={210} zIndexRange={[12, 0]}>
+      <Html position={guide.labelPosition} center distanceFactor={135} zIndexRange={[12, 0]}>
         <div
-          className={`pointer-events-auto flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[11px] font-bold shadow-md backdrop-blur-sm transition ${
+          className={`pointer-events-auto flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-sm transition ${
             isSelected
               ? 'border-amber-400 bg-amber-500 text-slate-950'
               : 'border-cyan-400/70 bg-slate-950/90 text-cyan-100 hover:border-amber-400'
@@ -257,10 +257,10 @@ export function GuideLines3D() {
           <Html
             position={previewGuide.labelPosition}
             center
-            distanceFactor={200}
+            distanceFactor={135}
             zIndexRange={[10, 0]}
           >
-            <div className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-lg border border-orange-400 bg-orange-950/95 px-2.5 py-1 text-xs font-extrabold text-orange-100 shadow-lg">
+            <div className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-md border border-orange-400 bg-orange-950/95 px-2 py-0.5 text-[11px] font-bold text-orange-100 shadow-sm">
               {previewGuide.distanceCm} سم
             </div>
           </Html>

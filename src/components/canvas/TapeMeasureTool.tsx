@@ -476,15 +476,15 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
             <sphereGeometry args={[1.2, 16, 16]} />
             <meshBasicMaterial color={activeColor} />
           </mesh>
-          <Html position={measureMid} center distanceFactor={200} zIndexRange={[10, 0]}>
+          <Html position={measureMid} center distanceFactor={135} zIndexRange={[10, 0]}>
             <div
-              className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-xl border bg-slate-950/95 px-2.5 py-1 text-center shadow-xl backdrop-blur-sm"
+              className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-md border bg-slate-950/95 px-2 py-0.5 text-center shadow-sm backdrop-blur-sm"
               style={{ borderColor: activeColor }}
             >
-              <div className="text-xs font-extrabold" style={{ color: activeColor }}>
+              <div className="text-[11px] font-extrabold leading-tight" style={{ color: activeColor }}>
                 {tapeMeasureDraft.distanceCm} سم
               </div>
-              <div className="text-[10px] font-semibold text-slate-300">
+              <div className="text-[9px] font-semibold text-slate-300">
                 {tapeMeasureDraft.lockedAxis
                   ? getAxisLabelAr(tapeMeasureDraft.lockedAxis)
                   : `X:${dx} · Y:${dy} · Z:${dz}`}

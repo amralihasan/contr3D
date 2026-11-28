@@ -138,6 +138,16 @@ export const HUMAN_SCALE_HEIGHTS_CM: Record<HumanScalePreset, number> = {
   child: 110,
 }
 
+export type HeightDimensionSide = 'left' | 'right'
+export type WidthDimensionSide = 'front' | 'back' | 'top'
+export type DepthDimensionSide = 'right' | 'left'
+
+export interface DimensionPlacement {
+  heightSide: HeightDimensionSide
+  widthSide: WidthDimensionSide
+  depthSide: DepthDimensionSide
+}
+
 export interface TapeMeasureDraft {
   start: Vec3
   end: Vec3
