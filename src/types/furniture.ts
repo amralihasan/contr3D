@@ -120,6 +120,8 @@ export interface FurniturePanel {
   handle?: PanelHandleConfig
   /** جهة المفصلة للضلفة المفصلية أو اتجاه انزلاق الضلفة الجرار */
   hingeSide?: HingeSide
+  /** تغطية الوجه الأمامي للضلفة بطبقة مرايا */
+  hasMirror?: boolean
   /** لون القاعدة المعدنية (أسود مط، ذهبي، أبيض مط، أنثراسيت) */
   metalColor?: MetalBaseColor
 }
@@ -207,6 +209,7 @@ export interface PricingConfig {
   drawerSlidePrice: number
   handlePrice: number
   legsSetPrice: number
+  mirrorPricePerSqm: number
   laborCost: number
   profitMarginPercent: number
 }

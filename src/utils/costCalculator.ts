@@ -29,6 +29,8 @@ export interface CostEstimateReport {
   drawerCount: number
   handleCount: number
   legsSetCount: number
+  mirrorDoorCount: number
+  mirrorAreaSqm: number
   lineItems: CostLineItem[]
   materialsCost: number
   laborCost: number
@@ -70,14 +72,24 @@ export function computeCostEstimate(
   let drawerCount = 0
   let handleCount = 0
   let legsSetCount = 0
+  let mirrorDoorCount = 0
+  let totalMirrorSqm = 0
 
   for (const panel of panels) {
     if (panel.role === 'hinged_door') {
       hingedDoorCount += 1
       hingeCount += panel.dimensions.height > 100 ? 3 : 2
       if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
+      if (panel.hasMirror) {
+        mirrorDoorCount += 1
+        totalMirrorSqm += (panel.dimensions.width * panel.dimensions.height) / 10000
+      }
     } else if (panel.role === 'sliding_door') {
       if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
+      if (panel.hasMirror) {
+        mirrorDoorCount += 1
+        totalMirrorSqm += (panel.dimensions.width * panel.dimensions.height) / 10000
+      }
     } else if (panel.role === 'drawer') {
       drawerCount += 1
       if (getEffectivePanelHandle(panel).type !== 'none') handleCount += 1
@@ -92,6 +104,8 @@ export function computeCostEstimate(
       legsSetCount += 1
     }
   }
+
+  const mirrorAreaSqm = roundTo(totalMirrorSqm, 2)
 
   const lineItems: CostLineItem[] = [
     {
@@ -167,6 +181,19 @@ export function computeCostEstimate(
       priceField: 'legsSetPrice',
       totalCost: roundTo(legsSetCount * pricing.legsSetPrice, 2),
     },
+    {
+      key: 'mirror',
+      label: 'مرايا ضلف (سعر المتر المربع)',
+      note:
+        mirrorDoorCount > 0
+          ? `${mirrorDoorCount} ضلفة مرايا بإجمالي ${mirrorAreaSqm} م²`
+          : 'تُحسب تلقائياً عند وجود ضلف مغطاة بمرايا',
+      quantity: mirrorAreaSqm,
+      unitLabel: 'م²',
+      unitPrice: pricing.mirrorPricePerSqm,
+      priceField: 'mirrorPricePerSqm',
+      totalCost: roundTo(mirrorAreaSqm * pricing.mirrorPricePerSqm, 2),
+    },
   ]
 
   const materialsCost = roundTo(
@@ -188,6 +215,8 @@ export function computeCostEstimate(
     drawerCount,
     handleCount,
     legsSetCount,
+    mirrorDoorCount,
+    mirrorAreaSqm,
     lineItems,
     materialsCost,
     laborCost,

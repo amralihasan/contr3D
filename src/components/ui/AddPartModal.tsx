@@ -36,7 +36,12 @@ export function AddPartModal({ preset, onClose, onConfirm }: AddPartModalProps) 
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
     >
-      <AddPartModalForm key={preset.role} preset={preset} onClose={onClose} onConfirm={onConfirm} />
+      <AddPartModalForm
+        key={preset.id ?? preset.role}
+        preset={preset}
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />
     </div>,
     document.body
   )

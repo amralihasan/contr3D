@@ -8,6 +8,7 @@ import {
   Plus,
   RotateCw,
   SlidersHorizontal,
+  Sparkles,
   Square,
   Trash2,
   X,
@@ -212,6 +213,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const setPanelHandle = useDesignStore((s) => s.setPanelHandle)
   const applyHandleToAllFronts = useDesignStore((s) => s.applyHandleToAllFronts)
   const setPanelHingeSide = useDesignStore((s) => s.setPanelHingeSide)
+  const setPanelHasMirror = useDesignStore((s) => s.setPanelHasMirror)
   const togglePanelEdgeBanding = useDesignStore((s) => s.togglePanelEdgeBanding)
   const setPanelCornerRadius = useDesignStore((s) => s.setPanelCornerRadius)
   const addPanelCutout = useDesignStore((s) => s.addPanelCutout)
@@ -546,25 +548,56 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
                 />
 
                 {(panel.role === 'hinged_door' || panel.role === 'sliding_door') && (
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(['right', 'left'] as const).map((side) => {
-                      const active = (panel.hingeSide ?? 'right') === side
-                      return (
-                        <button
-                          key={side}
-                          type="button"
-                          onClick={() => setPanelHingeSide(panel.id, side)}
-                          className={`h-9 rounded-xl border text-xs font-bold transition ${
-                            active
-                              ? 'border-amber-500 bg-amber-500/20 text-amber-200'
-                              : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                  <>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['right', 'left'] as const).map((side) => {
+                        const active = (panel.hingeSide ?? 'right') === side
+                        return (
+                          <button
+                            key={side}
+                            type="button"
+                            onClick={() => setPanelHingeSide(panel.id, side)}
+                            className={`h-9 rounded-xl border text-xs font-bold transition ${
+                              active
+                                ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {side === 'right' ? 'جهة: يمين' : 'جهة: يسار'}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setPanelHasMirror(panel.id, !panel.hasMirror)}
+                      className={`flex h-11 w-full items-center justify-between rounded-xl border px-3 text-xs font-bold transition ${
+                        panel.hasMirror
+                          ? 'border-cyan-400/60 bg-cyan-500/15 text-cyan-200'
+                          : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                      }`}
+                      aria-pressed={Boolean(panel.hasMirror)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Sparkles
+                          className={`h-4 w-4 ${
+                            panel.hasMirror ? 'text-cyan-300' : 'text-slate-400'
                           }`}
-                        >
-                          {side === 'right' ? 'جهة: يمين' : 'جهة: يسار'}
-                        </button>
-                      )
-                    })}
-                  </div>
+                        />
+                        <span>تغطية الوجه بمرايا</span>
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                          panel.hasMirror
+                            ? 'bg-cyan-400 text-slate-950'
+                            : 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        {panel.hasMirror ? 'مفعّل' : 'بدون'}
+                      </span>
+                    </button>
+                  </>
                 )}
               </div>
             )}

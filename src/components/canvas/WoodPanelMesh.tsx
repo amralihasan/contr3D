@@ -13,7 +13,7 @@ import {
   buildExtrudedPanelGeometry,
   hasCustomPanelGeometry,
 } from '../../utils/panelGeometry'
-import { getWoodTexture } from '../../utils/woodTextures'
+import { getMirrorTexture, getWoodTexture } from '../../utils/woodTextures'
 import { FurnitureBaseMesh } from './FurnitureBaseMesh'
 import { PanelHandle } from './PanelHandle'
 import type { TapePanelHandlers } from './TapeMeasureTool'
@@ -261,6 +261,50 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     const { width, height, depth } = panel.dimensions
     const clearance = panel.clearanceCm ?? 0.2
     const handleConfig = getEffectivePanelHandle(panel)
+    const mirrorTexture = panel.hasMirror ? getMirrorTexture() : null
+
+    const renderMirrorLayer = (effW: number, effH: number, effD: number) => {
+      if (!panel.hasMirror) return null
+      const frameBorder = effW > 6 && effH > 6 ? 0.5 : 0
+      const mirrorW = Math.max(1, effW - frameBorder * 2)
+      const mirrorH = Math.max(1, effH - frameBorder * 2)
+      const mirrorThick = 0.3
+      const mirrorZ = effD / 2 + mirrorThick / 2 + 0.04
+
+      return (
+        <mesh position={[0, 0, mirrorZ]} castShadow receiveShadow onClick={handleClick}>
+          <boxGeometry args={[mirrorW, mirrorH, mirrorThick]} />
+          {isSketch ? (
+            <meshStandardMaterial
+              color="#f8fafc"
+              roughness={0.9}
+              metalness={0}
+              polygonOffset
+              polygonOffsetFactor={polyOffset + 1}
+              polygonOffsetUnits={polyOffset + 1}
+            />
+          ) : (
+            <meshPhysicalMaterial
+              color="#e2e8f0"
+              map={mirrorTexture ?? null}
+              metalness={0.9}
+              roughness={0.08}
+              clearcoat={1}
+              clearcoatRoughness={0.06}
+              envMapIntensity={1.45}
+              polygonOffset
+              polygonOffsetFactor={polyOffset + 1}
+              polygonOffsetUnits={polyOffset + 1}
+            />
+          )}
+          <Edges
+            threshold={15}
+            color={isSketch ? '#1e293b' : isSelected ? '#fbbf24' : '#94a3b8'}
+            lineWidth={isSketch ? 1.5 : isSelected ? 2 : 0.9}
+          />
+        </mesh>
+      )
+    }
 
     // 1. ضلفة مفصلية
     if (panel.role === 'hinged_door') {
@@ -269,6 +313,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       const effD = depth
       const hingeSide = panel.hingeSide ?? 'right'
       const hingeX = hingeSide === 'left' ? -effW / 2 : effW / 2
+      const handleFrontZ = effD / 2 + (panel.hasMirror ? 0.34 : 0)
 
       return (
         <group position={[hingeX, 0, 0]} ref={animRef}>
@@ -290,11 +335,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
                 opacity={edgeOpacity}
               />
             </mesh>
+            {renderMirrorLayer(effW, effH, effD)}
             <PanelHandle
               config={handleConfig}
               faceWidth={effW}
               faceHeight={effH}
-              frontZ={effD / 2}
+              frontZ={handleFrontZ}
               panelDepth={effD}
               isSketch={isSketch}
               onClick={handleClick}
@@ -309,6 +355,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       const effW = Math.max(2, width - clearance * 2)
       const effH = Math.max(2, height - clearance * 2)
       const effD = depth
+      const handleFrontZ = effD / 2 + (panel.hasMirror ? 0.34 : 0)
 
       return (
         <group ref={animRef}>
@@ -329,11 +376,12 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
               opacity={edgeOpacity}
             />
           </mesh>
+          {renderMirrorLayer(effW, effH, effD)}
           <PanelHandle
             config={handleConfig}
             faceWidth={effW}
             faceHeight={effH}
-            frontZ={effD / 2}
+            frontZ={handleFrontZ}
             panelDepth={effD}
             isSketch={isSketch}
             onClick={handleClick}

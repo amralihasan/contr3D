@@ -38,6 +38,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfig = {
   drawerSlidePrice: 140,
   handlePrice: 55,
   legsSetPrice: 320,
+  mirrorPricePerSqm: 850,
   laborCost: 800,
   profitMarginPercent: 30,
 }
@@ -223,6 +224,9 @@ export function sanitizePanel(raw: unknown): FurniturePanel | null {
   }
   if (obj.hingeSide === 'left' || obj.hingeSide === 'right') {
     panel.hingeSide = obj.hingeSide
+  }
+  if (typeof obj.hasMirror === 'boolean') {
+    panel.hasMirror = obj.hasMirror
   }
   if (
     obj.metalColor === 'matte_black' ||
@@ -1033,6 +1037,10 @@ export function loadPricingConfig(): PricingConfig {
       drawerSlidePrice: num(obj.drawerSlidePrice, DEFAULT_PRICING_CONFIG.drawerSlidePrice),
       handlePrice: num(obj.handlePrice, DEFAULT_PRICING_CONFIG.handlePrice),
       legsSetPrice: num(obj.legsSetPrice, DEFAULT_PRICING_CONFIG.legsSetPrice),
+      mirrorPricePerSqm: num(
+        obj.mirrorPricePerSqm,
+        DEFAULT_PRICING_CONFIG.mirrorPricePerSqm
+      ),
       laborCost: num(obj.laborCost, DEFAULT_PRICING_CONFIG.laborCost),
       profitMarginPercent: num(
         obj.profitMarginPercent,

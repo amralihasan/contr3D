@@ -84,3 +84,46 @@ export function getWoodTexture(materialId: MaterialId): THREE.CanvasTexture | nu
   textureCache.set(materialId, texture)
   return texture
 }
+
+let cachedMirrorTexture: THREE.CanvasTexture | null = null
+
+/**
+ * ينشئ تدرج لمعان مائل خفيف لطبقة المرايا حتى تبدو واقعية وواضحة على الخلفية الداكنة والبيضاء
+ */
+export function getMirrorTexture(): THREE.CanvasTexture | null {
+  if (cachedMirrorTexture) return cachedMirrorTexture
+  if (typeof document === 'undefined') return null
+
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const grad = ctx.createLinearGradient(0, 0, 512, 512)
+  grad.addColorStop(0, '#cbd5e1')
+  grad.addColorStop(0.28, '#e2e8f0')
+  grad.addColorStop(0.48, '#f8fafc')
+  grad.addColorStop(0.56, '#dbeafe')
+  grad.addColorStop(0.75, '#e2e8f0')
+  grad.addColorStop(1, '#cbd5e1')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, 512, 512)
+
+  // خطا انعكاس مائلان ناعمان لإيحاء الزجاج العاكس
+  ctx.save()
+  ctx.translate(256, 256)
+  ctx.rotate(-Math.PI / 5)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.38)'
+  ctx.fillRect(-380, -36, 760, 42)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)'
+  ctx.fillRect(-380, 22, 760, 16)
+  ctx.restore()
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.anisotropy = 4
+  texture.needsUpdate = true
+  cachedMirrorTexture = texture
+  return texture
+}

@@ -282,8 +282,29 @@ export function buildCutListReport(panels: FurniturePanel[]): CutListReport {
 
       const effHandle = getEffectivePanelHandle(panel)
       const baseNotes = buildPanelWorkshopNotes(panel)
+      const mirrorNote = panel.hasMirror ? 'ضلفة مرايا' : ''
       const handleNote = formatHandleWorkshopNote(effHandle)
-      const combinedNotes = [baseNotes, handleNote].filter(Boolean).join(' | ')
+      const combinedNotes = [mirrorNote, baseNotes, handleNote].filter(Boolean).join(' | ')
+
+      if (panel.hasMirror) {
+        const glassW = roundTo(panel.dimensions.width, 1)
+        const glassH = roundTo(panel.dimensions.height, 1)
+        const areaSqm = roundTo((glassW * glassH) / 10000, 2)
+        const mirrorDimLabel = `${glassW} × ${glassH} سم (${areaSqm} م²)`
+        const mirrorKey = `mirror|${glassW}x${glassH}`
+        const existingMirror = hardwareMap.get(mirrorKey)
+        if (existingMirror) {
+          existingMirror.quantity += 1
+        } else {
+          hardwareMap.set(mirrorKey, {
+            key: mirrorKey,
+            name: 'مرايا ضلفة',
+            dimensionsLabel: mirrorDimLabel,
+            materialLabel: 'زجاج مرايا فضي 3 مم',
+            quantity: 1,
+          })
+        }
+      }
 
       if (effHandle.type !== 'none') {
         const lenLabel =

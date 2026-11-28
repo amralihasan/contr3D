@@ -14,6 +14,7 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { PartsSidebar } from './components/ui/PartsSidebar'
 import { PropertiesPanel } from './components/ui/PropertiesPanel'
 import { QuickActionMenu } from './components/ui/QuickActionMenu'
+import { ReferenceImageWindow } from './components/ui/ReferenceImageWindow'
 import { TapeMeasureHud } from './components/ui/TapeMeasureHud'
 import { TopToolbar } from './components/ui/TopToolbar'
 import { WorkshopReportModal } from './components/ui/WorkshopReportModal'
@@ -31,6 +32,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [ecommerceExportOpen, setEcommerceExportOpen] = useState(false)
+  const [refImageOpen, setRefImageOpen] = useState(false)
   const [mobilePartsOpen, setMobilePartsOpen] = useState(false)
   const [mobilePropsOpen, setMobilePropsOpen] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
@@ -219,6 +221,8 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
         onOpenDesignsModal={() => setDesignsModalOpen(true)}
         onOpenWorkshopReport={() => setWorkshopReportOpen(true)}
         onOpenEcommerceExport={() => setEcommerceExportOpen(true)}
+        refImageOpen={refImageOpen}
+        onToggleRefImage={() => setRefImageOpen((v) => !v)}
         onTogglePartsDrawer={() => {
           setMobilePartsOpen((v) => !v)
           setMobilePropsOpen(false)
@@ -389,6 +393,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
         open={ecommerceExportOpen}
         onClose={() => setEcommerceExportOpen(false)}
       />
+      <ReferenceImageWindow open={refImageOpen} onClose={() => setRefImageOpen(false)} />
     </div>
   )
 }

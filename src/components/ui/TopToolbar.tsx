@@ -18,6 +18,7 @@ import {
   Magnet,
   Maximize2,
   Minimize2,
+  PictureInPicture2,
   Redo2,
   Ruler,
   SlidersHorizontal,
@@ -33,6 +34,8 @@ interface TopToolbarProps {
   onOpenDesignsModal: () => void
   onOpenWorkshopReport: () => void
   onOpenEcommerceExport: () => void
+  refImageOpen: boolean
+  onToggleRefImage: () => void
   onTogglePartsDrawer: () => void
   onTogglePropsDrawer: () => void
   onLockApp: () => void
@@ -44,6 +47,8 @@ export function TopToolbar({
   onOpenDesignsModal,
   onOpenWorkshopReport,
   onOpenEcommerceExport,
+  refImageOpen,
+  onToggleRefImage,
   onTogglePartsDrawer,
   onTogglePropsDrawer,
   onLockApp,
@@ -328,6 +333,21 @@ export function TopToolbar({
           aria-label="وضع التركيز"
         >
           {focusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleRefImage}
+          aria-pressed={refImageOpen}
+          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition ${
+            refImageOpen
+              ? 'border-cyan-400/65 bg-cyan-500/20 text-cyan-200'
+              : 'border-slate-700/80 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+          }`}
+          title="إظهار / إخفاء نافذة الصورة المرجعية العائمة"
+        >
+          <PictureInPicture2 className="h-4 w-4 text-cyan-300" />
+          <span className="hidden lg:inline">صورة مرجعية</span>
         </button>
       </div>
 

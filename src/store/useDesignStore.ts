@@ -285,7 +285,12 @@ interface DesignState {
   // Panel CRUD & Clipboard
   addPresetPanel: (
     role: Exclude<PanelRole, 'custom'>,
-    options?: { dimensions?: PanelDimensions; quantity?: number }
+    options?: {
+      presetId?: string
+      dimensions?: PanelDimensions
+      quantity?: number
+      hasMirror?: boolean
+    }
   ) => void
   duplicatePanel: (id: string) => void
   deletePanel: (id: string) => void
@@ -304,6 +309,7 @@ interface DesignState {
   setPanelHandle: (id: string, patch: Partial<PanelHandleConfig>) => void
   applyHandleToAllFronts: (sourceId: string) => void
   setPanelHingeSide: (id: string, side: HingeSide) => void
+  setPanelHasMirror: (id: string, hasMirror: boolean) => void
   togglePanelEdgeBanding: (id: string, side: EdgeSide) => void
   setPanelEdgeBanding: (id: string, edgeBanding: EdgeBanding) => void
   setPanelCornerRadius: (id: string, cornerRadius: CornerRadius) => void
@@ -839,7 +845,10 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
   clearStatusToast: () => set({ statusToast: null }),
 
   addPresetPanel: (role, options) => {
-    const preset = ALL_PRESETS.find((p) => p.role === role)
+    const preset =
+      (options?.presetId
+        ? ALL_PRESETS.find((p) => p.id === options.presetId)
+        : undefined) ?? ALL_PRESETS.find((p) => p.role === role)
     if (!preset) return
 
     const { panels, guides, past } = get()
@@ -914,6 +923,9 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
         ...(preset.clearanceCm !== undefined ? { clearanceCm: preset.clearanceCm } : {}),
         ...(preset.hasHandle !== undefined ? { hasHandle: preset.hasHandle } : {}),
         ...(preset.hingeSide !== undefined ? { hingeSide: preset.hingeSide } : {}),
+        ...((options?.hasMirror ?? preset.hasMirror) !== undefined
+          ? { hasMirror: options?.hasMirror ?? preset.hasMirror }
+          : {}),
         ...(preset.metalColor !== undefined ? { metalColor: preset.metalColor } : {}),
       })
     }
@@ -1312,6 +1324,24 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       panels: nextPanels,
       past: pushPast(past, panels, guides),
       future: [],
+    })
+  },
+
+  setPanelHasMirror: (id, hasMirror) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, hasMirror } : p
+    )
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast: hasMirror ? 'تم تفعيل المرايا على الضلفة' : 'تم إلغاء المرايا من الضلفة',
     })
   },
 

@@ -20,6 +20,7 @@ export const CAMERA_PRESETS: Record<
 }
 
 export interface PanelPreset {
+  id?: string
   role: Exclude<PanelRole, 'custom'>
   category: PanelCategory
   label: string
@@ -32,6 +33,7 @@ export interface PanelPreset {
   clearanceCm?: number
   hasHandle?: boolean
   hingeSide?: HingeSide
+  hasMirror?: boolean
   metalColor?: MetalBaseColor
 }
 
@@ -116,6 +118,22 @@ export const INTERFACE_PRESETS: PanelPreset[] = [
     clearanceCm: 0.2,
     hasHandle: true,
     hingeSide: 'left',
+  },
+  {
+    id: 'mirror_door',
+    role: 'hinged_door',
+    category: 'front',
+    label: 'ضلفة مرايا',
+    shortLabel: 'ضلفة مرايا',
+    subtitle: '45 × 180 سم · مرايا + كونتر 1.8 سم',
+    dimensions: { width: 45, height: 180, depth: 1.8 },
+    thicknessAxis: 'z',
+    defaultMaterial: 'light_oak',
+    defaultPosition: [25, 90, 21.1],
+    clearanceCm: 0.2,
+    hasHandle: true,
+    hingeSide: 'right',
+    hasMirror: true,
   },
   {
     role: 'drawer',

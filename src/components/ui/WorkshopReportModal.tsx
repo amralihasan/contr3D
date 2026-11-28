@@ -399,7 +399,7 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                     {cutReport.hardware.length > 0 && (
                       <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                         <h3 className="mb-2.5 text-xs font-bold text-slate-200">
-                          الرجول والإكسسوارات الجاهزة
+                          الرجول والإكسسوارات والزجاج
                         </h3>
                         <div className="space-y-1.5 text-xs">
                           {cutReport.hardware.map((hw) => (
@@ -503,7 +503,7 @@ function WorkshopReportModalContent({ onClose }: { onClose: () => void }) {
                           {formatEgp(costReport.materialsCost)}
                         </div>
                         <div className="mt-1 text-[11px] text-slate-500">
-                          خشب + شريط حرف + مفصلات ومجاري ومقابض ورجول
+                          خشب + شريط حرف + إكسسوارات ومرايا
                         </div>
                       </div>
 

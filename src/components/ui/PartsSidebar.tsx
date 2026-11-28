@@ -30,7 +30,7 @@ import {
 } from '../../constants/presets'
 import { FURNITURE_TEMPLATES } from '../../constants/templates'
 import { useDesignStore } from '../../store/useDesignStore'
-import type { PanelDimensions, PanelRole } from '../../types/furniture'
+import type { PanelDimensions } from '../../types/furniture'
 import { AddPartModal } from './AddPartModal'
 
 interface PartsSidebarProps {
@@ -39,8 +39,11 @@ interface PartsSidebarProps {
 
 type SidebarTab = 'panels' | 'fronts' | 'bases' | 'templates'
 
-function getPresetIcon(role: Exclude<PanelRole, 'custom'>) {
-  switch (role) {
+function getPresetIcon(preset: PanelPreset) {
+  if (preset.hasMirror) {
+    return <Sparkles className="h-5 w-5 text-cyan-300" />
+  }
+  switch (preset.role) {
     case 'horizontal':
       return <Rows3 className="h-5 w-5 text-amber-400" />
     case 'vertical':
@@ -103,7 +106,12 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
 
   const handleConfirmAddPreset = (dimensions: PanelDimensions, quantity: number) => {
     if (!pendingPreset) return
-    addPresetPanel(pendingPreset.role, { dimensions, quantity })
+    addPresetPanel(pendingPreset.role, {
+      presetId: pendingPreset.id,
+      dimensions,
+      quantity,
+      hasMirror: pendingPreset.hasMirror,
+    })
     setPendingPreset(null)
     onCloseMobile?.()
   }
@@ -445,14 +453,14 @@ export function PartsSidebar({ onCloseMobile }: PartsSidebarProps) {
         ) : (
           activePresets.map((preset) => (
             <button
-              key={preset.role}
+              key={preset.id ?? preset.role}
               type="button"
               onClick={() => setPendingPreset(preset)}
               className="group flex min-h-[54px] w-full items-center justify-between gap-2.5 rounded-2xl border border-slate-800 bg-slate-800/60 px-3 py-2 text-right transition hover:border-amber-500/50 hover:bg-slate-800 active:scale-[0.99]"
             >
               <div className="flex items-center gap-2.5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 ring-1 ring-slate-700/80">
-                  {getPresetIcon(preset.role)}
+                  {getPresetIcon(preset)}
                 </div>
                 <div>
                   <div className="text-xs font-bold text-slate-100 sm:text-sm">
