@@ -493,24 +493,22 @@ export interface ImportedProjectData {
   thumbnail?: string
 }
 
-export function parseAndValidateProjectJson(rawText: string): ImportedProjectData {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(rawText)
-  } catch {
-    throw new Error('الملف غير صالح: تعذر قراءة تنسيق JSON.')
-  }
+export type ParsedImportResult =
+  | {
+      kind: 'single'
+      project: ImportedProjectData
+    }
+  | {
+      kind: 'backup'
+      designs: ImportedProjectData[]
+      customTemplates: CustomTemplate[]
+    }
 
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('بنية الملف غير صالحة: يجب أن يحتوي على بيانات مشروع صحيحة.')
-  }
-
-  const root = parsed as Record<string, unknown>
-  const obj =
-    root.design && typeof root.design === 'object' && !Array.isArray(root.design)
-      ? (root.design as Record<string, unknown>)
-      : root
-
+function normalizeImportedProjectObject(
+  obj: Record<string, unknown>,
+  index = 0,
+  preserveId = false
+): ImportedProjectData {
   if ('format' in obj && obj.format !== undefined && obj.format !== 'contr3d-project') {
     throw new Error('هذا الملف ليس ملف مشروع متوافقاً مع مصمم الكونتر 3D.')
   }
@@ -528,7 +526,7 @@ export function parseAndValidateProjectJson(rawText: string): ImportedProjectDat
     }
     return {
       ...panelObj,
-      id: `panel_imp_${now}_${idx}`,
+      id: `panel_imp_${now}_${index}_${idx}`,
     }
   })
 
@@ -557,15 +555,87 @@ export function parseAndValidateProjectJson(rawText: string): ImportedProjectDat
       ? obj.thumbnail
       : undefined
 
+  const existingId =
+    preserveId && typeof obj.id === 'string'
+      ? obj.id.replace(/[^a-zA-Z0-9_-]/g, '')
+      : ''
+
   return {
-    id: `design_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    id: existingId || `design_${now}_${index}_${Math.random().toString(36).slice(2, 6)}`,
     name: cleanName,
     createdAt: rawCreatedAt,
-    updatedAt: now,
+    updatedAt: preserveId ? rawUpdatedAt : now,
     panels: cleanPanels,
     guides: cleanGuides,
     thumbnail,
   }
+}
+
+export function parseImportedJsonFile(rawText: string): ParsedImportResult {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(rawText)
+  } catch {
+    throw new Error('الملف غير صالح: تعذر قراءة تنسيق JSON.')
+  }
+
+  // حالة مصفوفة تصاميم مباشرة (Backup array)
+  if (Array.isArray(parsed)) {
+    const designs: ImportedProjectData[] = []
+    for (let i = 0; i < parsed.length; i += 1) {
+      const item = parsed[i]
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const candidate = item as Record<string, unknown>
+      if (!Array.isArray(candidate.panels)) continue
+      designs.push(normalizeImportedProjectObject(candidate, i, true))
+    }
+    if (designs.length === 0) {
+      throw new Error('ملف النسخة الاحتياطية لا يحتوي على أي تصاميم صالحة.')
+    }
+    return { kind: 'backup', designs, customTemplates: [] }
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('بنية الملف غير صالحة: يجب أن يحتوي على بيانات مشروع صحيحة.')
+  }
+
+  const root = parsed as Record<string, unknown>
+
+  // حالة ملف النسخة الاحتياطية الكاملة ({ designs: [...], customTemplates?: [...] })
+  if (Array.isArray(root.designs)) {
+    const designs: ImportedProjectData[] = []
+    for (let i = 0; i < root.designs.length; i += 1) {
+      const item = root.designs[i]
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const candidate = item as Record<string, unknown>
+      if (!Array.isArray(candidate.panels)) continue
+      designs.push(normalizeImportedProjectObject(candidate, i, true))
+    }
+    const customTemplates = sanitizeCustomTemplateList(root.customTemplates)
+    if (designs.length === 0 && customTemplates.length === 0) {
+      throw new Error('ملف النسخة الاحتياطية فارغ أو لا يحتوي على تصاميم صالحة.')
+    }
+    return { kind: 'backup', designs, customTemplates }
+  }
+
+  // حالة تصميم واحد ({ panels: [...] } أو { design: { panels: [...] } })
+  const obj =
+    root.design && typeof root.design === 'object' && !Array.isArray(root.design)
+      ? (root.design as Record<string, unknown>)
+      : root
+
+  return {
+    kind: 'single',
+    project: normalizeImportedProjectObject(obj, 0, false),
+  }
+}
+
+export function parseAndValidateProjectJson(rawText: string): ImportedProjectData {
+  const result = parseImportedJsonFile(rawText)
+  if (result.kind === 'backup') {
+    throw new Error('هذا الملف نسخة احتياطية متعددة التصاميم.')
+  }
+  return result.project
 }
 
 export function deleteSavedDesign(id: string): SavedDesign[] {
@@ -791,6 +861,45 @@ export async function downloadAllDesignsBackup(): Promise<void> {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }, 200)
+}
+
+export async function restoreBackupOnServer(
+  designs: ImportedProjectData[],
+  customTemplates: CustomTemplate[]
+): Promise<{ restoredCount: number; customTemplatesRestored: number }> {
+  let res: Response
+  try {
+    res = await fetch('/api/designs/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        designs: deepClone(designs),
+        customTemplates: deepClone(customTemplates),
+      }),
+    })
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر لاستعادة النسخة الاحتياطية، تأكد من تشغيل السيرفر.')
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorMessage(res, 'تعذر استعادة ملف النسخة الاحتياطية على السيرفر.')
+    )
+  }
+
+  const data: unknown = await res.json()
+  const obj = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
+  const restoredCount =
+    typeof obj.restoredCount === 'number' && Number.isFinite(obj.restoredCount)
+      ? obj.restoredCount
+      : designs.length
+  const customTemplatesRestored =
+    typeof obj.customTemplatesRestored === 'number' &&
+    Number.isFinite(obj.customTemplatesRestored)
+      ? obj.customTemplatesRestored
+      : 0
+
+  return { restoredCount, customTemplatesRestored }
 }
 
 function sanitizeCustomTemplateList(rawList: unknown): CustomTemplate[] {
