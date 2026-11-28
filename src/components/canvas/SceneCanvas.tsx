@@ -562,7 +562,7 @@ export function SceneCanvas() {
         <HumanReference />
         <TapeMeasureTool objectMap={objectMap} handlersRef={tapeHandlersRef} />
         <DimensionsOverlay3D />
-        <PanelTransformGizmo selectedObject={selectedObject} />
+        <PanelTransformGizmo selectedObject={selectedObject} objectMap={objectMap} />
         <PanelResizeHandles selectedObject={selectedObject} />
         <ExportCaptureController />
       </Canvas>

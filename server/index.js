@@ -78,7 +78,7 @@ async function readCustomTemplatesList() {
 }
 
 const app = express()
-app.use(express.json({ limit: '20mb' }))
+app.use(express.json({ limit: '50mb' }))
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
@@ -308,6 +308,119 @@ app.post('/api/designs', async (req, res) => {
   await handleUpsertDesign(req, res, null)
 })
 
+// 3ب. استعادة نسخة احتياطية كاملة (مصفوفة تصاميم + قوالب مخصصة اختيارية)
+app.post('/api/designs/restore', async (req, res) => {
+  try {
+    await ensureStorageReady()
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    if (!Array.isArray(body.designs)) {
+      res.status(400).json({
+        error: 'بيانات النسخة الاحتياطية غير صالحة: لا تحتوي على مصفوفة تصاميم.',
+      })
+      return
+    }
+
+    const now = Date.now()
+    let restoredCount = 0
+
+    for (let idx = 0; idx < body.designs.length; idx += 1) {
+      const item = body.designs[idx]
+      if (!item || typeof item !== 'object') continue
+
+      const rawId = sanitizeId(item.id)
+      const safeId =
+        rawId || `design_${now}_${idx}_${Math.random().toString(36).slice(2, 6)}`
+      const filePath = getDesignFilePath(safeId)
+      if (!filePath) continue
+
+      let existing = null
+      try {
+        existing = await readDesignFile(filePath)
+      } catch {
+        existing = null
+      }
+
+      const cleanName =
+        typeof item.name === 'string' && item.name.trim().length > 0
+          ? item.name.trim()
+          : existing && typeof existing.name === 'string' && existing.name.trim()
+            ? existing.name.trim()
+            : 'مشروع مستعاد'
+
+      const existingCreatedAt =
+        existing &&
+        typeof existing.createdAt === 'number' &&
+        Number.isFinite(existing.createdAt) &&
+        existing.createdAt > 0
+          ? existing.createdAt
+          : null
+
+      const itemCreatedAt =
+        typeof item.createdAt === 'number' &&
+        Number.isFinite(item.createdAt) &&
+        item.createdAt > 0
+          ? item.createdAt
+          : null
+
+      const itemUpdatedAt =
+        typeof item.updatedAt === 'number' &&
+        Number.isFinite(item.updatedAt) &&
+        item.updatedAt > 0
+          ? item.updatedAt
+          : now
+
+      const createdAt = existingCreatedAt ?? itemCreatedAt ?? itemUpdatedAt
+      const updatedAt = itemUpdatedAt
+
+      const thumbnail =
+        typeof item.thumbnail === 'string' && item.thumbnail.startsWith('data:image/')
+          ? item.thumbnail
+          : existing && typeof existing.thumbnail === 'string'
+            ? existing.thumbnail
+            : undefined
+
+      const record = {
+        id: safeId,
+        name: cleanName,
+        createdAt,
+        updatedAt,
+        panels: Array.isArray(item.panels) ? item.panels : [],
+        guides: Array.isArray(item.guides) ? item.guides : [],
+        ...(thumbnail ? { thumbnail } : {}),
+      }
+
+      await fs.writeFile(filePath, JSON.stringify(record, null, 2), 'utf8')
+      restoredCount += 1
+    }
+
+    let customTemplatesRestored = 0
+    if (Array.isArray(body.customTemplates) && body.customTemplates.length > 0) {
+      const existingTemplates = await readCustomTemplatesList()
+      const mergedMap = new Map()
+      for (const tpl of existingTemplates) {
+        if (tpl && typeof tpl === 'object' && typeof tpl.id === 'string') {
+          mergedMap.set(tpl.id, tpl)
+        }
+      }
+      for (const tpl of body.customTemplates) {
+        if (tpl && typeof tpl === 'object' && typeof tpl.id === 'string' && typeof tpl.name === 'string') {
+          mergedMap.set(tpl.id, tpl)
+          customTemplatesRestored += 1
+        }
+      }
+      const mergedList = Array.from(mergedMap.values()).sort(
+        (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+      )
+      await fs.writeFile(CUSTOM_TEMPLATES_FILE, JSON.stringify(mergedList, null, 2), 'utf8')
+    }
+
+    res.json({ restoredCount, customTemplatesRestored })
+  } catch (err) {
+    console.error('Failed to restore designs backup:', err)
+    res.status(500).json({ error: 'تعذر استعادة النسخة الاحتياطية على السيرفر.' })
+  }
+})
+
 app.put('/api/designs/:id', async (req, res) => {
   const safeId = sanitizeId(req.params.id)
   if (!safeId || safeId !== req.params.id) {
@@ -393,7 +506,7 @@ app.delete('/api/custom-templates/:id', async (req, res) => {
 // معالجة أخطاء حجم الملف أو صيغة JSON غير الصالحة برد JSON واضح
 app.use((err, _req, res, next) => {
   if (err && typeof err === 'object' && 'type' in err && err.type === 'entity.too.large') {
-    res.status(413).json({ error: 'حجم ملف المشروع أكبر من الحد المسموح (20 ميجابايت).' })
+    res.status(413).json({ error: 'حجم الملف أكبر من الحد المسموح (50 ميجابايت).' })
     return
   }
   if (err instanceof SyntaxError && 'body' in err) {

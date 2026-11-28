@@ -22,7 +22,8 @@ import type { SavedDesignSummary } from '../../types/furniture'
 import {
   downloadAllDesignsBackup,
   exportProjectToJsonFile,
-  parseAndValidateProjectJson,
+  parseImportedJsonFile,
+  restoreBackupOnServer,
 } from '../../utils/storage'
 
 interface DesignsModalProps {
@@ -53,6 +54,7 @@ function DesignsModalContent({
   const designsActionLoading = useDesignStore((s) => s.designsActionLoading)
   const designsError = useDesignStore((s) => s.designsError)
   const refreshSavedDesigns = useDesignStore((s) => s.refreshSavedDesigns)
+  const refreshCustomTemplates = useDesignStore((s) => s.refreshCustomTemplates)
   const clearDesignsError = useDesignStore((s) => s.clearDesignsError)
   const saveCurrentDesign = useDesignStore((s) => s.saveCurrentDesign)
   const importDesignProject = useDesignStore((s) => s.importDesignProject)
@@ -62,7 +64,9 @@ function DesignsModalContent({
 
   const [nameInput, setNameInput] = useState(currentDesignName)
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null)
+  const [restoreSuccessMsg, setRestoreSuccessMsg] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [importingFile, setImportingFile] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [downloadingBackup, setDownloadingBackup] = useState(false)
@@ -139,12 +143,25 @@ function DesignsModalContent({
     }
 
     setImportError(null)
+    setRestoreSuccessMsg(null)
     clearDesignsError()
+    setImportingFile(true)
     try {
       const text = await file.text()
-      const parsed = parseAndValidateProjectJson(text)
-      setNameInput(parsed.name)
-      const saved = await importDesignProject(parsed)
+      const parsed = parseImportedJsonFile(text)
+
+      if (parsed.kind === 'backup') {
+        const result = await restoreBackupOnServer(parsed.designs, parsed.customTemplates)
+        await refreshSavedDesigns()
+        await refreshCustomTemplates()
+        const msg = `تم استعادة ${result.restoredCount} تصميم بنجاح`
+        setRestoreSuccessMsg(msg)
+        showTempNotice(msg)
+        return
+      }
+
+      setNameInput(parsed.project.name)
+      const saved = await importDesignProject(parsed.project)
       if (saved) {
         onClose()
       }
@@ -153,6 +170,7 @@ function DesignsModalContent({
         err instanceof Error ? err.message : 'تعذر قراءة ملف المشروع، تأكد من صلاحية الملف.'
       )
     } finally {
+      setImportingFile(false)
       input.value = ''
     }
   }
@@ -281,12 +299,16 @@ function DesignsModalContent({
 
             <button
               type="button"
-              disabled={designsActionLoading}
+              disabled={designsActionLoading || importingFile}
               onClick={() => fileInputRef.current?.click()}
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-3.5 text-xs font-bold text-emerald-200 transition hover:bg-emerald-500/20 active:scale-[0.98] disabled:opacity-60"
             >
-              <Upload className="h-4 w-4 text-emerald-300" />
-              <span>استيراد ملف مشروع (.json)</span>
+              {importingFile ? (
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-300" />
+              ) : (
+                <Upload className="h-4 w-4 text-emerald-300" />
+              )}
+              <span>{importingFile ? 'جاري الاستيراد...' : 'استيراد ملف مشروع (.json)'}</span>
             </button>
 
             <button
@@ -314,6 +336,26 @@ function DesignsModalContent({
               className="hidden"
             />
           </div>
+
+          {restoreSuccessMsg && (
+            <div
+              role="status"
+              className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-emerald-500/45 bg-emerald-500/15 px-3.5 py-2.5 text-xs font-bold text-emerald-200"
+            >
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 shrink-0 text-emerald-300" />
+                <span>{restoreSuccessMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRestoreSuccessMsg(null)}
+                className="text-emerald-300 hover:text-white"
+                aria-label="إغلاق الإشعار"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
 
           {(importError || designsError) && (
             <div
