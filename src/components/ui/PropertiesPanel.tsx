@@ -31,6 +31,7 @@ import {
   isLegOrBaseRole,
   isMetalBaseRole,
   type Axis,
+  type CornerCutoutPosition,
   type CornerRadius,
   type EdgeSide,
   type HandleColor,
@@ -39,7 +40,11 @@ import {
   type MetalBaseColor,
   type PanelDimensions,
 } from '../../types/furniture'
-import { getMaxCornerRadius, getPanelFaceSize } from '../../utils/panelGeometry'
+import {
+  clampCornerCutout,
+  getMaxCornerRadius,
+  getPanelFaceSize,
+} from '../../utils/panelGeometry'
 import { roundTo } from '../../utils/snapping'
 
 interface PropertiesPanelProps {
@@ -217,6 +222,7 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const setPanelHasMirror = useDesignStore((s) => s.setPanelHasMirror)
   const togglePanelEdgeBanding = useDesignStore((s) => s.togglePanelEdgeBanding)
   const setPanelCornerRadius = useDesignStore((s) => s.setPanelCornerRadius)
+  const setPanelCornerCutout = useDesignStore((s) => s.setPanelCornerCutout)
   const addPanelCutout = useDesignStore((s) => s.addPanelCutout)
   const updatePanelCutout = useDesignStore((s) => s.updatePanelCutout)
   const removePanelCutout = useDesignStore((s) => s.removePanelCutout)
@@ -391,6 +397,11 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
   const cr: CornerRadius = panel.cornerRadius ?? { tl: 0, tr: 0, bl: 0, br: 0 }
   const maxCornerR = getMaxCornerRadius(panel.dimensions, panel.thicknessAxis)
   const { faceW, faceH } = getPanelFaceSize(panel.dimensions, panel.thicknessAxis)
+  const maxCornerCutW = Math.max(1, roundTo(faceW - 2, 2))
+  const maxCornerCutL = Math.max(1, roundTo(faceH - 2, 2))
+  const cornerCutout = panel.cornerCutout
+    ? clampCornerCutout(panel.cornerCutout, panel.dimensions, panel.thicknessAxis)
+    : null
   const cutouts = panel.cutouts ?? []
   const roundedCornersCount = [cr.tl, cr.tr, cr.bl, cr.br].filter((v) => v > 0.01).length
   const shapeModsCount = (roundedCornersCount > 0 ? 1 : 0) + cutouts.length
@@ -1187,6 +1198,146 @@ export function PropertiesPanel({ onCloseMobile }: PropertiesPanelProps) {
                   </div>
                 )}
               </div>
+            </div>
+          </AccordionSection>
+        )}
+
+        {/* 6. قص زاوية قائمة 90° (حرف L) */}
+        {supportsShapeAndCutouts && (
+          <AccordionSection
+            title="قص زاوية (90° / حرف L)"
+            badge={
+              cornerCutout
+                ? `${cornerCutout.cutWidth}×${cornerCutout.cutLength}`
+                : undefined
+            }
+            defaultOpen={Boolean(cornerCutout)}
+          >
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (cornerCutout) {
+                    setPanelCornerCutout(panel.id, null)
+                  } else {
+                    setPanelCornerCutout(panel.id, {
+                      corner: 'top-left',
+                      cutWidth: Math.min(20, maxCornerCutW),
+                      cutLength: Math.min(15, maxCornerCutL),
+                    })
+                  }
+                }}
+                className={`flex h-9 w-full items-center justify-between rounded-xl border px-3 text-xs font-bold transition ${
+                  cornerCutout
+                    ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                    : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                <span>{cornerCutout ? 'قص الزاوية مفعّل' : 'تفعيل قص زاوية (90°)'}</span>
+                <span
+                  className={`rounded-md px-2 py-0.5 text-[10px] ${
+                    cornerCutout
+                      ? 'bg-amber-400 text-slate-950'
+                      : 'bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  {cornerCutout ? 'مفعّل' : 'إيقاف'}
+                </span>
+              </button>
+
+              {cornerCutout && (
+                <>
+                  <div>
+                    <div className="mb-1.5 text-[11px] font-bold text-slate-300">
+                      اختر الركن المطلوب قصه
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(
+                        [
+                          { id: 'top-right', label: 'أعلى يمين', notchPos: 'top-0 right-0' },
+                          { id: 'top-left', label: 'أعلى يسار', notchPos: 'top-0 left-0' },
+                          { id: 'bottom-right', label: 'أسفل يمين', notchPos: 'bottom-0 right-0' },
+                          { id: 'bottom-left', label: 'أسفل يسار', notchPos: 'bottom-0 left-0' },
+                        ] as { id: CornerCutoutPosition; label: string; notchPos: string }[]
+                      ).map((opt) => {
+                        const active = cornerCutout.corner === opt.id
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() =>
+                              setPanelCornerCutout(panel.id, {
+                                ...cornerCutout,
+                                corner: opt.id,
+                              })
+                            }
+                            className={`flex h-9 items-center justify-center gap-1.5 rounded-xl border px-2 text-xs font-bold transition ${
+                              active
+                                ? 'border-amber-500 bg-amber-500/20 text-amber-200'
+                                : 'border-slate-700 bg-slate-800/70 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span className="relative h-3.5 w-3.5 shrink-0 rounded-[2px] border border-current/70 bg-current/15">
+                              <span
+                                className={`absolute h-1.5 w-1.5 bg-slate-900 ${opt.notchPos}`}
+                              />
+                            </span>
+                            <span>{opt.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="flex items-center justify-between gap-1 rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1.5">
+                      <span className="text-[10px] font-semibold text-slate-300">
+                        عرض القص (سم)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={1}
+                        max={maxCornerCutW}
+                        value={cornerCutout.cutWidth}
+                        onChange={(e) => {
+                          const v = Number.parseFloat(e.target.value)
+                          if (Number.isFinite(v)) {
+                            setPanelCornerCutout(panel.id, {
+                              ...cornerCutout,
+                              cutWidth: v,
+                            })
+                          }
+                        }}
+                        className="tabular-nums h-7 w-14 rounded border border-slate-700 bg-slate-950 text-center text-xs font-bold text-white outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1 rounded-lg border border-slate-800 bg-slate-900/70 px-2 py-1.5">
+                      <span className="text-[10px] font-semibold text-slate-300">
+                        طول القص (سم)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={1}
+                        max={maxCornerCutL}
+                        value={cornerCutout.cutLength}
+                        onChange={(e) => {
+                          const v = Number.parseFloat(e.target.value)
+                          if (Number.isFinite(v)) {
+                            setPanelCornerCutout(panel.id, {
+                              ...cornerCutout,
+                              cutLength: v,
+                            })
+                          }
+                        }}
+                        className="tabular-nums h-7 w-14 rounded border border-slate-700 bg-slate-950 text-center text-xs font-bold text-white outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </AccordionSection>
         )}

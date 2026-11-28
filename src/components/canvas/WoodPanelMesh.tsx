@@ -92,7 +92,8 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
       geomDims,
       panel.thicknessAxis,
       panel.cornerRadius,
-      panel.cutouts
+      panel.cutouts,
+      panel.cornerCutout
     )
   }, [
     useCustomExtrude,
@@ -102,6 +103,7 @@ export const WoodPanelMesh = memo(function WoodPanelMesh({
     panel.thicknessAxis,
     panel.cornerRadius,
     panel.cutouts,
+    panel.cornerCutout,
   ])
 
   useEffect(() => {

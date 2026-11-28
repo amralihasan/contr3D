@@ -2,6 +2,8 @@ import { MATERIALS } from '../constants/materials'
 import {
   getDefaultEdgeBanding,
   type Axis,
+  type CornerCutout,
+  type CornerCutoutPosition,
   type CornerRadius,
   type CustomTemplate,
   type EdgeBanding,
@@ -128,6 +130,31 @@ function sanitizeCutouts(raw: unknown): PanelCutout[] | undefined {
   return valid
 }
 
+function sanitizeCornerCutout(raw: unknown): CornerCutout | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  const validCorners: CornerCutoutPosition[] = [
+    'top-left',
+    'top-right',
+    'bottom-left',
+    'bottom-right',
+  ]
+  if (!validCorners.includes(obj.corner as CornerCutoutPosition)) return undefined
+  const cutWidth =
+    typeof obj.cutWidth === 'number' && Number.isFinite(obj.cutWidth) && obj.cutWidth > 0
+      ? obj.cutWidth
+      : 10
+  const cutLength =
+    typeof obj.cutLength === 'number' && Number.isFinite(obj.cutLength) && obj.cutLength > 0
+      ? obj.cutLength
+      : 10
+  return {
+    corner: obj.corner as CornerCutoutPosition,
+    cutWidth,
+    cutLength,
+  }
+}
+
 function sanitizeHandle(raw: unknown): PanelHandleConfig | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const obj = raw as Record<string, unknown>
@@ -241,6 +268,8 @@ export function sanitizePanel(raw: unknown): FurniturePanel | null {
   if (cornerRadius) panel.cornerRadius = cornerRadius
   const cutouts = sanitizeCutouts(obj.cutouts)
   if (cutouts) panel.cutouts = cutouts
+  const cornerCutout = sanitizeCornerCutout(obj.cornerCutout)
+  if (cornerCutout) panel.cornerCutout = cornerCutout
 
   return panel
 }

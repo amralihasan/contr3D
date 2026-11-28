@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type {
   Axis,
+  CornerCutout,
   CornerRadius,
   FurniturePanel,
   PanelCutout,
@@ -58,11 +59,38 @@ export function clampCornerRadius(
   }
 }
 
-export function hasCustomPanelGeometry(panel: Pick<FurniturePanel, 'cornerRadius' | 'cutouts'>): boolean {
+export function clampCornerCutout(
+  cornerCutout: CornerCutout | null | undefined,
+  dimensions: PanelDimensions,
+  thicknessAxis: Axis
+): CornerCutout | null {
+  if (!cornerCutout) return null
+  const { faceW, faceH } = getPanelFaceSize(dimensions, thicknessAxis)
+  const maxW = faceW >= 3 ? roundTo(faceW - 2, 2) : roundTo(Math.max(0.5, faceW - 0.5), 2)
+  const maxL = faceH >= 3 ? roundTo(faceH - 2, 2) : roundTo(Math.max(0.5, faceH - 0.5), 2)
+  const rawW = Number.isFinite(cornerCutout.cutWidth) ? cornerCutout.cutWidth : 10
+  const rawL = Number.isFinite(cornerCutout.cutLength) ? cornerCutout.cutLength : 10
+  const minVal = Math.min(1, maxW, maxL)
+
+  return {
+    corner: cornerCutout.corner,
+    cutWidth: roundTo(clampVal(rawW, minVal, maxW), 2),
+    cutLength: roundTo(clampVal(rawL, minVal, maxL), 2),
+  }
+}
+
+export function hasCustomPanelGeometry(
+  panel: Pick<FurniturePanel, 'cornerRadius' | 'cutouts' | 'cornerCutout'>
+): boolean {
   const cr = panel.cornerRadius
   const hasRadius = Boolean(cr && (cr.tl > 0.01 || cr.tr > 0.01 || cr.bl > 0.01 || cr.br > 0.01))
   const hasCutouts = Boolean(panel.cutouts && panel.cutouts.length > 0)
-  return hasRadius || hasCutouts
+  const hasCornerCut = Boolean(
+    panel.cornerCutout &&
+      panel.cornerCutout.cutWidth > 0.01 &&
+      panel.cornerCutout.cutLength > 0.01
+  )
+  return hasRadius || hasCutouts || hasCornerCut
 }
 
 function clampVal(v: number, min: number, max: number): number {
@@ -71,37 +99,104 @@ function clampVal(v: number, min: number, max: number): number {
 }
 
 /**
- * يبني هندسة ثلاثية الأبعاد (ExtrudeGeometry) للوح بدوران زوايا مخصص وفتحات أسلاك
+ * يبني هندسة ثلاثية الأبعاد (ExtrudeGeometry) للوح بدوران زوايا مخصص وفتحات أسلاك وقص زاوية قائمة 90°
  * مع توسيط المركز عند (0,0,0) وتطبيع إحداثيات الـ UV لتناسق تعريق الخشب
  */
 export function buildExtrudedPanelGeometry(
   dimensions: PanelDimensions,
   thicknessAxis: Axis,
   cornerRadius?: CornerRadius,
-  cutouts?: PanelCutout[]
+  cutouts?: PanelCutout[],
+  cornerCutout?: CornerCutout | null
 ): THREE.ExtrudeGeometry {
   const { faceW, faceH, thickness } = getPanelFaceSize(dimensions, thicknessAxis)
   const hw = Math.max(0.5, faceW / 2)
   const hh = Math.max(0.5, faceH / 2)
   const cr = clampCornerRadius(cornerRadius, dimensions, thicknessAxis)
+  const notch = clampCornerCutout(cornerCutout, dimensions, thicknessAxis)
+
+  const blR =
+    notch?.corner === 'bottom-left'
+      ? 0
+      : Math.min(
+          cr.bl,
+          notch?.corner === 'bottom-right' ? Math.max(0, faceW - notch.cutWidth - 0.2) : cr.bl,
+          notch?.corner === 'top-left' ? Math.max(0, faceH - notch.cutLength - 0.2) : cr.bl
+        )
+  const brR =
+    notch?.corner === 'bottom-right'
+      ? 0
+      : Math.min(
+          cr.br,
+          notch?.corner === 'bottom-left' ? Math.max(0, faceW - notch.cutWidth - 0.2) : cr.br,
+          notch?.corner === 'top-right' ? Math.max(0, faceH - notch.cutLength - 0.2) : cr.br
+        )
+  const trR =
+    notch?.corner === 'top-right'
+      ? 0
+      : Math.min(
+          cr.tr,
+          notch?.corner === 'top-left' ? Math.max(0, faceW - notch.cutWidth - 0.2) : cr.tr,
+          notch?.corner === 'bottom-right' ? Math.max(0, faceH - notch.cutLength - 0.2) : cr.tr
+        )
+  const tlR =
+    notch?.corner === 'top-left'
+      ? 0
+      : Math.min(
+          cr.tl,
+          notch?.corner === 'top-right' ? Math.max(0, faceW - notch.cutWidth - 0.2) : cr.tl,
+          notch?.corner === 'bottom-left' ? Math.max(0, faceH - notch.cutLength - 0.2) : cr.tl
+        )
 
   const shape = new THREE.Shape()
-  shape.moveTo(-hw + cr.bl, -hh)
-  shape.lineTo(hw - cr.br, -hh)
-  if (cr.br > 0) {
-    shape.absarc(hw - cr.br, -hh + cr.br, cr.br, -Math.PI / 2, 0, false)
+  if (notch?.corner === 'bottom-left') {
+    shape.moveTo(-hw + notch.cutWidth, -hh)
+  } else {
+    shape.moveTo(-hw + blR, -hh)
   }
-  shape.lineTo(hw, hh - cr.tr)
-  if (cr.tr > 0) {
-    shape.absarc(hw - cr.tr, hh - cr.tr, cr.tr, 0, Math.PI / 2, false)
+
+  if (notch?.corner === 'bottom-right') {
+    shape.lineTo(hw - notch.cutWidth, -hh)
+    shape.lineTo(hw - notch.cutWidth, -hh + notch.cutLength)
+    shape.lineTo(hw, -hh + notch.cutLength)
+  } else {
+    shape.lineTo(hw - brR, -hh)
+    if (brR > 0) {
+      shape.absarc(hw - brR, -hh + brR, brR, -Math.PI / 2, 0, false)
+    }
   }
-  shape.lineTo(-hw + cr.tl, hh)
-  if (cr.tl > 0) {
-    shape.absarc(-hw + cr.tl, hh - cr.tl, cr.tl, Math.PI / 2, Math.PI, false)
+
+  if (notch?.corner === 'top-right') {
+    shape.lineTo(hw, hh - notch.cutLength)
+    shape.lineTo(hw - notch.cutWidth, hh - notch.cutLength)
+    shape.lineTo(hw - notch.cutWidth, hh)
+  } else {
+    shape.lineTo(hw, hh - trR)
+    if (trR > 0) {
+      shape.absarc(hw - trR, hh - trR, trR, 0, Math.PI / 2, false)
+    }
   }
-  shape.lineTo(-hw, -hh + cr.bl)
-  if (cr.bl > 0) {
-    shape.absarc(-hw + cr.bl, -hh + cr.bl, cr.bl, Math.PI, Math.PI * 1.5, false)
+
+  if (notch?.corner === 'top-left') {
+    shape.lineTo(-hw + notch.cutWidth, hh)
+    shape.lineTo(-hw + notch.cutWidth, hh - notch.cutLength)
+    shape.lineTo(-hw, hh - notch.cutLength)
+  } else {
+    shape.lineTo(-hw + tlR, hh)
+    if (tlR > 0) {
+      shape.absarc(-hw + tlR, hh - tlR, tlR, Math.PI / 2, Math.PI, false)
+    }
+  }
+
+  if (notch?.corner === 'bottom-left') {
+    shape.lineTo(-hw, -hh + notch.cutLength)
+    shape.lineTo(-hw + notch.cutWidth, -hh + notch.cutLength)
+    shape.lineTo(-hw + notch.cutWidth, -hh)
+  } else {
+    shape.lineTo(-hw, -hh + blR)
+    if (blR > 0) {
+      shape.absarc(-hw + blR, -hh + blR, blR, Math.PI, Math.PI * 1.5, false)
+    }
   }
   shape.closePath()
 

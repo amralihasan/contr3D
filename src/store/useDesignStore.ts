@@ -15,6 +15,7 @@ import {
   isInterfaceRole,
   type Axis,
   type CameraPreset,
+  type CornerCutout,
   type CornerRadius,
   type CustomTemplate,
   type DimensionPlacement,
@@ -41,7 +42,7 @@ import {
 } from '../types/furniture'
 import { computeAutoDistribution, type DistributeAxis } from '../utils/distribution'
 import { computeOverallDimensions } from '../utils/dimensions'
-import { clampCornerRadius } from '../utils/panelGeometry'
+import { clampCornerCutout, clampCornerRadius } from '../utils/panelGeometry'
 import { clampPanelAboveFloor, getWorldHalfExtents, roundTo } from '../utils/snapping'
 import {
   deepClone,
@@ -332,6 +333,7 @@ interface DesignState {
   togglePanelEdgeBanding: (id: string, side: EdgeSide) => void
   setPanelEdgeBanding: (id: string, edgeBanding: EdgeBanding) => void
   setPanelCornerRadius: (id: string, cornerRadius: CornerRadius) => void
+  setPanelCornerCutout: (id: string, cornerCutout: CornerCutout | null) => void
   addPanelCutout: (id: string) => void
   updatePanelCutout: (id: string, cutoutId: string, patch: Partial<PanelCutout>) => void
   removePanelCutout: (id: string, cutoutId: string) => void
@@ -1535,6 +1537,26 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const clamped = clampCornerRadius(cornerRadius, target.dimensions, target.thicknessAxis)
     const nextPanels = panels.map((p) =>
       p.id === id ? { ...p, cornerRadius: clamped } : p
+    )
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
+  },
+
+  setPanelCornerCutout: (id, cornerCutout) => {
+    const { panels, guides, past } = get()
+    const target = panels.find((p) => p.id === id)
+    if (!target) return
+
+    const clamped = cornerCutout
+      ? clampCornerCutout(cornerCutout, target.dimensions, target.thicknessAxis)
+      : null
+    const nextPanels = panels.map((p) =>
+      p.id === id ? { ...p, cornerCutout: clamped } : p
     )
     saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
 

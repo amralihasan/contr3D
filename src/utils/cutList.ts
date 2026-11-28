@@ -2,6 +2,7 @@ import { MATERIALS } from '../constants/materials'
 import {
   getEffectiveEdgeBanding,
   getEffectivePanelHandle,
+  type CornerCutoutPosition,
   type EdgeBanding,
   type FurniturePanel,
   type HandleColor,
@@ -11,6 +12,7 @@ import {
   type PanelHandleConfig,
   type PanelRole,
 } from '../types/furniture'
+import { clampCornerCutout } from './panelGeometry'
 import { roundTo } from './snapping'
 
 export interface CutPieceItem {
@@ -169,6 +171,25 @@ function buildPanelWorkshopNotes(panel: FurniturePanel): string {
       } else {
         notes.push(`فتحة سلك مستطيلة ${c.width}×${c.height} سم (${c.x},${c.y})`)
       }
+    }
+  }
+
+  if (panel.cornerCutout) {
+    const cornerLabels: Record<CornerCutoutPosition, string> = {
+      'top-left': 'أعلى يسار',
+      'top-right': 'أعلى يمين',
+      'bottom-left': 'أسفل يسار',
+      'bottom-right': 'أسفل يمين',
+    }
+    const clamped = clampCornerCutout(
+      panel.cornerCutout,
+      panel.dimensions,
+      panel.thicknessAxis
+    )
+    if (clamped) {
+      notes.push(
+        `تفريغ زاوية (${cornerLabels[clamped.corner]}): ${clamped.cutWidth} × ${clamped.cutLength} سم`
+      )
     }
   }
 

@@ -93,6 +93,14 @@ export interface PanelCutout {
   diameter?: number
 }
 
+export type CornerCutoutPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
+export interface CornerCutout {
+  corner: CornerCutoutPosition
+  cutWidth: number
+  cutLength: number
+}
+
 export interface FurniturePanel {
   id: string
   name: string
@@ -113,6 +121,8 @@ export interface FurniturePanel {
   cornerRadius?: CornerRadius
   /** فتحات الأسلاك / الفحر داخل اللوح */
   cutouts?: PanelCutout[]
+  /** قص زاوية قائمة 90° (حرف L) من أحد أركان اللوح */
+  cornerCutout?: CornerCutout | null
   /** الخلوص (Clearance) للضلف والأدراج بالسنتيمتر، الافتراضي 0.2 سم (2 مم) */
   clearanceCm?: number
   /** عرض مقبض بسيط للضلفة أو الدرج */
