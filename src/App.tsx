@@ -47,6 +47,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const selectedPanelIds = useDesignStore((s) => s.selectedPanelIds)
   const selectedGuideId = useDesignStore((s) => s.selectedGuideId)
   const toolMode = useDesignStore((s) => s.toolMode)
+  const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const activeReferenceEdge = useDesignStore((s) => s.activeReferenceEdge)
   const panels = useDesignStore((s) => s.panels)
 
@@ -57,6 +58,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const pasteClipboard = useDesignStore((s) => s.pasteClipboard)
   const duplicateSelected = useDesignStore((s) => s.duplicateSelected)
   const deleteSelected = useDesignStore((s) => s.deleteSelected)
+  const nudgeSelectedPanels = useDesignStore((s) => s.nudgeSelectedPanels)
   const deleteGuide = useDesignStore((s) => s.deleteGuide)
   const selectGuide = useDesignStore((s) => s.selectGuide)
   const selectPanel = useDesignStore((s) => s.selectPanel)
@@ -164,6 +166,47 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
         }
       }
 
+      // التحريك الدقيق بأسهم الكيبورد (0.1 سم = 1 مم، ومع Shift = 1 سم، ومع Alt أو الوضع العلوي = محور Z)
+      if (
+        !mod &&
+        !designsModalOpen &&
+        !workshopReportOpen &&
+        !ecommerceExportOpen &&
+        toolMode === 'select' &&
+        selectedPanelIds.length > 0 &&
+        (e.key === 'ArrowLeft' ||
+          e.key === 'ArrowRight' ||
+          e.key === 'ArrowUp' ||
+          e.key === 'ArrowDown')
+      ) {
+        e.preventDefault()
+        const step = e.shiftKey ? 1 : 0.1
+        let dx = 0
+        let dy = 0
+        let dz = 0
+
+        if (e.key === 'ArrowRight') {
+          dx = step
+        } else if (e.key === 'ArrowLeft') {
+          dx = -step
+        } else if (e.key === 'ArrowUp') {
+          if (e.altKey || cameraPreset === 'top') {
+            dz = -step
+          } else {
+            dy = step
+          }
+        } else if (e.key === 'ArrowDown') {
+          if (e.altKey || cameraPreset === 'top') {
+            dz = step
+          } else {
+            dy = -step
+          }
+        }
+
+        nudgeSelectedPanels(dx, dy, dz)
+        return
+      }
+
       if (e.key === 'Escape') {
         if (contextMenuPos) {
           setContextMenuPos(null)
@@ -195,6 +238,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     pasteClipboard,
     duplicateSelected,
     deleteSelected,
+    nudgeSelectedPanels,
     deleteGuide,
     selectGuide,
     selectPanel,
@@ -205,6 +249,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     selectedPanelIds,
     selectedGuideId,
     toolMode,
+    cameraPreset,
     activeReferenceEdge,
     designsModalOpen,
     workshopReportOpen,

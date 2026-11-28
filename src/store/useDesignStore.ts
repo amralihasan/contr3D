@@ -300,6 +300,7 @@ interface DesignState {
   pasteClipboard: () => void
   duplicateSelected: () => void
   deleteSelected: () => void
+  nudgeSelectedPanels: (dx: number, dy: number, dz: number) => void
 
   // Panel properties
   updatePanelDimension: (id: string, key: keyof PanelDimensions, value: number) => void
@@ -1111,6 +1112,44 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   deleteSelected: () => {
     get().deleteSelectedPanels()
+  },
+
+  nudgeSelectedPanels: (dx, dy, dz) => {
+    const { panels, guides, past, selectedPanelIds } = get()
+    if (selectedPanelIds.length === 0) return
+    if (dx === 0 && dy === 0 && dz === 0) return
+
+    const selectedSet = new Set(selectedPanelIds)
+    let changed = false
+
+    const nextPanels = panels.map((p) => {
+      if (!selectedSet.has(p.id)) return p
+      const nextX = Math.round((p.position[0] + dx) * 100) / 100
+      const nextYRaw = Math.round((p.position[1] + dy) * 100) / 100
+      const nextZ = Math.round((p.position[2] + dz) * 100) / 100
+
+      const [, hy] = getWorldHalfExtents(p.dimensions, p.rotation)
+      const minCenterY = Math.round(hy * 100) / 100
+      const nextY = nextYRaw < minCenterY ? minCenterY : nextYRaw
+
+      if (nextX === p.position[0] && nextY === p.position[1] && nextZ === p.position[2]) {
+        return p
+      }
+      changed = true
+      return {
+        ...p,
+        position: [nextX, nextY, nextZ] as Vec3,
+      }
+    })
+
+    if (!changed) return
+
+    saveAutosave(nextPanels, guides, get().currentDesignName, get().currentDesignId)
+    set({
+      panels: nextPanels,
+      past: pushPast(past, panels, guides),
+      future: [],
+    })
   },
 
   updatePanelDimension: (id, key, value) => {
