@@ -52,6 +52,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   const toolMode = useDesignStore((s) => s.toolMode)
   const cameraPreset = useDesignStore((s) => s.cameraPreset)
   const activeReferenceEdge = useDesignStore((s) => s.activeReferenceEdge)
+  const tapeMeasureDraft = useDesignStore((s) => s.tapeMeasureDraft)
   const panels = useDesignStore((s) => s.panels)
 
   const undo = useDesignStore((s) => s.undo)
@@ -266,10 +267,10 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
           setDesignsModalOpen(false)
         } else if (activeReferenceEdge) {
           setActiveReferenceEdge(null)
-        } else if (selectedGuideId) {
-          selectGuide(null)
         } else if (toolMode === 'tape') {
           setToolMode('select')
+        } else if (selectedGuideId) {
+          selectGuide(null)
         } else if (selectedPanelIds.length > 0) {
           selectPanel(null)
         }
@@ -307,7 +308,10 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   ])
 
   const hideBottomFloatingActions =
-    mobilePropsOpen || Boolean(selectedGuideId) || Boolean(activeReferenceEdge)
+    mobilePropsOpen ||
+    Boolean(selectedGuideId) ||
+    Boolean(activeReferenceEdge) ||
+    Boolean(tapeMeasureDraft)
 
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100 print:hidden">

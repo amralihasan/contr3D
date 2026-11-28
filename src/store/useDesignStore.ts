@@ -32,6 +32,7 @@ import {
   type SavedDesign,
   type SavedDesignSummary,
   type SnapFeedback,
+  type TapeMeasureDraft,
   type TapeMode,
   type ToolMode,
   type TransformMode,
@@ -59,7 +60,12 @@ import {
   saveDesignToServer,
   saveUiPreferences,
 } from '../utils/storage'
-import { buildGuideLineGeometry, type ReferenceEdge } from '../utils/tapeMeasure'
+import {
+  buildGuideLineGeometry,
+  buildPointGuideGeometry,
+  updatePointGuideDistance,
+  type ReferenceEdge,
+} from '../utils/tapeMeasure'
 import { captureSceneThumbnail } from '../utils/thumbnail'
 
 const MAX_HISTORY = 50
@@ -208,6 +214,7 @@ interface DesignState {
   activeReferenceEdge: ReferenceEdge | null
   draftGuideDistanceCm: number
   draftGuideDirection: 1 | -1
+  tapeMeasureDraft: TapeMeasureDraft | null
 
   snappingEnabled: boolean
   isDraggingGizmo: boolean
@@ -257,6 +264,14 @@ interface DesignState {
   setActiveReferenceEdge: (edge: ReferenceEdge | null) => void
   setDraftGuideParams: (distanceCm: number, direction: 1 | -1) => void
   commitDraftGuide: () => void
+  setTapeMeasureDraft: (draft: TapeMeasureDraft | null) => void
+  addPointGuide: (
+    start: Vec3,
+    end: Vec3,
+    lockedAxis?: Axis | null,
+    unitDir?: Vec3
+  ) => void
+  commitTapeDraftDistance: (distanceCm: number) => void
   addGuideFromEdge: (edge: ReferenceEdge, distanceCm: number, direction: 1 | -1) => void
   updateGuideDistance: (id: string, distanceCm: number) => void
   flipGuideDirection: (id: string) => void
@@ -448,13 +463,14 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
 
   toolMode: 'select',
   transformMode: 'move',
-  tapeMode: 'guide',
+  tapeMode: 'measure',
   isDraggingTape: false,
   isResizingHandle: false,
   liveResizePreview: null,
   activeReferenceEdge: null,
   draftGuideDistanceCm: 30,
   draftGuideDirection: 1,
+  tapeMeasureDraft: null,
 
   snappingEnabled: true,
   isDraggingGizmo: false,
@@ -587,6 +603,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       isDraggingTape: false,
       isResizingHandle: false,
       activeReferenceEdge: null,
+      tapeMeasureDraft: null,
       selectedGuideId: null,
       selectedPanelId: mode === 'tape' ? null : get().selectedPanelId,
       selectedPanelIds: mode === 'tape' ? [] : get().selectedPanelIds,
@@ -597,6 +614,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       transformMode: mode,
       isResizingHandle: false,
       toolMode: 'select',
+      tapeMeasureDraft: null,
       statusToast:
         mode === 'resize'
           ? 'وضع تمديد المقاس: اسحب أطراف اللوح لتغيير مقاسه'
@@ -607,6 +625,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     set({
       tapeMode: mode,
       activeReferenceEdge: null,
+      tapeMeasureDraft: null,
       isDraggingTape: false,
     }),
 
@@ -624,6 +643,7 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       selectedPanelId: id ? null : get().selectedPanelId,
       selectedPanelIds: id ? [] : get().selectedPanelIds,
       activeReferenceEdge: null,
+      tapeMeasureDraft: null,
     }),
 
   setActiveReferenceEdge: (edge) =>
@@ -645,6 +665,46 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     if (!activeReferenceEdge) return
     get().addGuideFromEdge(activeReferenceEdge, draftGuideDistanceCm, draftGuideDirection)
     set({ activeReferenceEdge: null })
+  },
+
+  setTapeMeasureDraft: (draft) => set({ tapeMeasureDraft: draft }),
+
+  addPointGuide: (start, end, lockedAxis = null, unitDir) => {
+    const { panels, guides, past, currentDesignName, currentDesignId } = get()
+    const newGuide = buildPointGuideGeometry({
+      id: createId('guide'),
+      start,
+      end,
+      lockedAxis,
+      unitDir,
+    })
+    if (newGuide.distanceCm < 0.05) return
+
+    const nextGuides = [...guides, newGuide]
+    saveAutosave(panels, nextGuides, currentDesignName, currentDesignId)
+
+    set({
+      guides: nextGuides,
+      guidesVisible: true,
+      selectedGuideId: newGuide.id,
+      tapeMeasureDraft: null,
+      past: pushPast(past, panels, guides),
+      future: [],
+      statusToast: `تم تثبيت علام بطول ${newGuide.distanceCm} سم`,
+    })
+  },
+
+  commitTapeDraftDistance: (distanceCm) => {
+    const draft = get().tapeMeasureDraft
+    if (!draft) return
+    const safe = Math.max(0.1, roundTo(distanceCm, 2))
+    const dir = draft.unitDir
+    const nextEnd: Vec3 = [
+      roundTo(draft.start[0] + dir[0] * safe, 2),
+      roundTo(draft.start[1] + dir[1] * safe, 2),
+      roundTo(draft.start[2] + dir[2] * safe, 2),
+    ]
+    get().addPointGuide(draft.start, nextEnd, draft.lockedAxis, dir)
   },
 
   addGuideFromEdge: (edge, distanceCm, direction) => {
@@ -687,9 +747,13 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const safe = Math.max(0, roundTo(distanceCm, 2))
     if (target.distanceCm === safe) return
 
-    const nextGuides = guides.map((g) =>
-      g.id === id ? buildGuideLineGeometry({ ...g, distanceCm: safe }) : g
-    )
+    const nextGuides = guides.map((g) => {
+      if (g.id !== id) return g
+      if (g.kind === 'point') {
+        return updatePointGuideDistance(g, safe)
+      }
+      return buildGuideLineGeometry({ ...g, distanceCm: safe })
+    })
     saveAutosave(panels, nextGuides, currentDesignName, currentDesignId)
 
     set({
@@ -704,10 +768,28 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
     const target = guides.find((g) => g.id === id)
     if (!target) return
 
-    const nextDir: 1 | -1 = target.direction === 1 ? -1 : 1
-    const nextGuides = guides.map((g) =>
-      g.id === id ? buildGuideLineGeometry({ ...g, direction: nextDir }) : g
-    )
+    const nextGuides = guides.map((g) => {
+      if (g.id !== id) return g
+      if (g.kind === 'point') {
+        const start = g.measureStart ?? g.spanStart
+        const prevDir = g.unitDir ?? [1, 0, 0]
+        const flippedDir: Vec3 = [-prevDir[0], -prevDir[1], -prevDir[2]]
+        const nextEnd: Vec3 = [
+          roundTo(start[0] + flippedDir[0] * g.distanceCm, 2),
+          roundTo(start[1] + flippedDir[1] * g.distanceCm, 2),
+          roundTo(start[2] + flippedDir[2] * g.distanceCm, 2),
+        ]
+        return buildPointGuideGeometry({
+          id: g.id,
+          start,
+          end: nextEnd,
+          unitDir: flippedDir,
+          lockedAxis: g.lockedAxis ?? null,
+        })
+      }
+      const nextDir: 1 | -1 = g.direction === 1 ? -1 : 1
+      return buildGuideLineGeometry({ ...g, direction: nextDir })
+    })
     saveAutosave(panels, nextGuides, currentDesignName, currentDesignId)
 
     set({

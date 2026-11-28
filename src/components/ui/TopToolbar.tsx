@@ -246,11 +246,12 @@ export function TopToolbar({
             <button
               type="button"
               onClick={clearAllGuides}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+              className="flex h-9 shrink-0 items-center gap-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-2.5 text-[11px] font-bold text-rose-200 transition hover:bg-rose-500/25"
               title="مسح كل العلامات"
               aria-label="مسح كل العلامات"
             >
               <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">مسح كل العلامات</span>
             </button>
           </>
         )}
