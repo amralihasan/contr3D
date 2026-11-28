@@ -31,7 +31,9 @@ import {
   User,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useDesignStore } from '../../store/useDesignStore'
+import { DimensionPlacementControls } from './DimensionPlacementControls'
 
 interface TopToolbarProps {
   onOpenDesignsModal: () => void
@@ -85,6 +87,8 @@ export function TopToolbar({
 
   const showDimensions = useDesignStore((s) => s.showDimensions)
   const toggleShowDimensions = useDesignStore((s) => s.toggleShowDimensions)
+  const dimensionPlacement = useDesignStore((s) => s.dimensionPlacement)
+  const setDimensionPlacement = useDesignStore((s) => s.setDimensionPlacement)
 
   const showHumanReference = useDesignStore((s) => s.showHumanReference)
   const toggleHumanReference = useDesignStore((s) => s.toggleHumanReference)
@@ -118,17 +122,41 @@ export function TopToolbar({
 
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
+  const [dimsMenuOpen, setDimsMenuOpen] = useState(false)
+  const [dimsMenuPos, setDimsMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const dimsMenuRef = useRef<HTMLDivElement | null>(null)
+  const dimsBtnRef = useRef<HTMLButtonElement | null>(null)
+  const dimsPopoverRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (!exportMenuOpen) return
+    if (!exportMenuOpen && !dimsMenuOpen) return
     const onOutside = (e: PointerEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (exportMenuOpen && exportMenuRef.current && !exportMenuRef.current.contains(target)) {
         setExportMenuOpen(false)
+      }
+      if (
+        dimsMenuOpen &&
+        dimsMenuRef.current &&
+        !dimsMenuRef.current.contains(target) &&
+        (!dimsPopoverRef.current || !dimsPopoverRef.current.contains(target))
+      ) {
+        setDimsMenuOpen(false)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (dimsMenuOpen && e.key === 'Escape') {
+        e.stopPropagation()
+        setDimsMenuOpen(false)
       }
     }
     window.addEventListener('pointerdown', onOutside)
-    return () => window.removeEventListener('pointerdown', onOutside)
-  }, [exportMenuOpen])
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => {
+      window.removeEventListener('pointerdown', onOutside)
+      window.removeEventListener('keydown', onKeyDown, { capture: true })
+    }
+  }, [exportMenuOpen, dimsMenuOpen])
 
   return (
     <header className="z-30 flex h-[52px] min-h-[52px] items-center justify-between gap-2 border-b border-slate-800/90 bg-slate-900/95 px-2.5 backdrop-blur-md">
@@ -246,28 +274,93 @@ export function TopToolbar({
             <button
               type="button"
               onClick={clearAllGuides}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+              className="flex h-9 shrink-0 items-center gap-1 rounded-xl border border-rose-500/40 bg-rose-500/15 px-2.5 text-[11px] font-bold text-rose-200 transition hover:bg-rose-500/25"
               title="مسح كل العلامات"
               aria-label="مسح كل العلامات"
             >
               <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">مسح كل العلامات</span>
             </button>
           </>
         )}
 
-        <button
-          type="button"
-          onClick={toggleShowDimensions}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition ${
-            showDimensions
-              ? 'border-sky-500/50 bg-sky-500/15 text-sky-200'
-              : 'border-slate-700/80 bg-slate-800/70 text-slate-400 hover:text-slate-200'
-          }`}
-          title="إظهار / إخفاء خطوط المقاسات 3D"
-          aria-label="المقاسات 3D"
-        >
-          <DraftingCompass className="h-4 w-4" />
-        </button>
+        <div ref={dimsMenuRef} className="relative flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => {
+              if (showDimensions) {
+                setDimsMenuOpen(false)
+              }
+              toggleShowDimensions()
+            }}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center border transition ${
+              showDimensions
+                ? 'rounded-r-xl border-sky-500/50 bg-sky-500/15 text-sky-200'
+                : 'rounded-xl border-slate-700/80 bg-slate-800/70 text-slate-400 hover:text-slate-200'
+            }`}
+            title="إظهار / إخفاء خطوط المقاسات 3D"
+            aria-label="المقاسات 3D"
+          >
+            <DraftingCompass className="h-4 w-4" />
+          </button>
+
+          {showDimensions && (
+            <button
+              ref={dimsBtnRef}
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (dimsMenuOpen) {
+                  setDimsMenuOpen(false)
+                  return
+                }
+                const rect = (dimsBtnRef.current ?? e.currentTarget).getBoundingClientRect()
+                const popoverW = 264
+                const left = Math.max(8, Math.min(window.innerWidth - popoverW - 8, rect.left))
+                const top = rect.bottom + 8
+                setDimsMenuPos({ top, left })
+                setDimsMenuOpen(true)
+              }}
+              className={`flex h-9 w-6 shrink-0 items-center justify-center rounded-l-xl border-y border-l transition ${
+                dimsMenuOpen
+                  ? 'border-sky-400 bg-sky-500/30 text-sky-100'
+                  : 'border-sky-500/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
+              }`}
+              title="أماكن خطوط المقاسات (يسار / يمين / أمام / أعلى / خلف)"
+              aria-label="خيارات أماكن خطوط المقاسات"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {showDimensions &&
+            dimsMenuOpen &&
+            dimsMenuPos &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                ref={dimsPopoverRef}
+                dir="rtl"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                style={{ top: dimsMenuPos.top, left: dimsMenuPos.left }}
+                className="fixed z-[9999] w-[264px] rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md"
+              >
+                <div className="mb-2 flex items-center justify-between border-b border-slate-800 pb-1.5">
+                  <span className="text-xs font-extrabold text-sky-300">
+                    مواضع خطوط المقاسات 3D
+                  </span>
+                </div>
+                <DimensionPlacementControls
+                  placement={dimensionPlacement}
+                  onChange={setDimensionPlacement}
+                  compact
+                />
+              </div>,
+              document.body
+            )}
+        </div>
 
         <div className="mx-0.5 hidden h-5 w-px bg-slate-800 sm:block" />
 

@@ -1,7 +1,18 @@
 import * as THREE from 'three'
-import { isLegOrBaseRole, type CameraPreset, type FurniturePanel } from '../types/furniture'
+import {
+  isLegOrBaseRole,
+  type CameraPreset,
+  type DimensionPlacement,
+  type FurniturePanel,
+} from '../types/furniture'
 import { computeOverallDimensions } from './dimensions'
 import { getPanelWorldBox, roundTo } from './snapping'
+
+export const DEFAULT_DIMENSION_PLACEMENT: DimensionPlacement = {
+  heightSide: 'left',
+  widthSide: 'front',
+  depthSide: 'right',
+}
 
 export type EcommerceCameraAngle = 'current' | CameraPreset
 
@@ -203,7 +214,7 @@ function drawCleanDimensionLine({
   ctx.lineTo(d2x, d2y)
   ctx.stroke()
 
-  const arrowSize = 7.5 * scale
+  const arrowSize = 6.2 * scale
   drawEndTickOrArrow(ctx, d1x, d1y, -ux, -uy, arrowSize, lineColor)
   drawEndTickOrArrow(ctx, d2x, d2y, ux, uy, arrowSize, lineColor)
 
@@ -215,7 +226,7 @@ function drawCleanDimensionLine({
 
   const midX = (d1x + d2x) / 2
   const midY = (d1y + d2y) / 2
-  const textShift = labelSide === 'outside' ? 18 * scale : 0
+  const textShift = labelSide === 'outside' ? 15 * scale : 0
   const labelX = midX + outwardNormalX * textShift
   const labelY = midY + outwardNormalY * textShift
 
@@ -247,7 +258,8 @@ function drawCleanDimensionLine({
 export function drawEcommerceDimensionsOnCanvas(
   ctx: CanvasRenderingContext2D,
   snapshot: EcommerceCaptureSnapshot,
-  showInternalDimensions: boolean
+  showInternalDimensions: boolean,
+  placement: DimensionPlacement = DEFAULT_DIMENSION_PLACEMENT
 ): void {
   const { baseCanvas, camera, panels, width: outW, height: outH } = snapshot
   const scale = Math.min(2.2, Math.max(1.1, outW / 1200))
@@ -291,69 +303,91 @@ export function drawEcommerceDimensionsOnCanvas(
   const frontZ = camera.position.z >= boxCenterWorld.z ? maxZ : minZ
   const backZ = frontZ === maxZ ? minZ : maxZ
 
-  // 2. المقاسات الثلاثة الأساسية فقط (Bounding Box):
-  // (أ) العرض الكلي (Width - X) أسفل القطعة
-  const w1 = projectPoint(minX, minY, frontZ, camera, outW, outH)
-  const w2 = projectPoint(maxX, minY, frontZ, camera, outW, outH)
+  // 2. المقاسات الثلاثة الأساسية فقط (Bounding Box) وفق إعدادات الموضع:
+  // (أ) العرض الكلي (Width - X): أمام / أعلى / خلف
+  const widthY = placement.widthSide === 'top' ? maxY : minY
+  const widthZ = placement.widthSide === 'back' ? backZ : frontZ
+  const w1 = projectPoint(minX, widthY, widthZ, camera, outW, outH)
+  const w2 = projectPoint(maxX, widthY, widthZ, camera, outW, outH)
   if (w1.ndcZ <= 1 && w2.ndcZ <= 1) {
-    const nW = chooseOutwardNormal(w1, w2, boxCenter2D)
+    let nW = chooseOutwardNormal(w1, w2, boxCenter2D)
+    if (placement.widthSide === 'top') {
+      nW = { nx: 0, ny: -1 }
+    } else if (placement.widthSide === 'back') {
+      const frontMid = projectPoint((minX + maxX) / 2, minY, frontZ, camera, outW, outH)
+      const backMid = projectPoint((minX + maxX) / 2, minY, backZ, camera, outW, outH)
+      const bdx = backMid.x - frontMid.x
+      const bdy = backMid.y - frontMid.y
+      const blen = Math.hypot(bdx, bdy)
+      if (blen > 6) {
+        nW = { nx: bdx / blen, ny: bdy / blen }
+      }
+    }
     drawCleanDimensionLine({
       ctx,
       p1: w1,
       p2: w2,
       outwardNormalX: nW.nx,
       outwardNormalY: nW.ny,
-      offsetPx: 54 * scale,
+      offsetPx: (placement.widthSide === 'top' ? 48 : 54) * scale,
       label: formatEnCm(width),
       scale,
       canvasW: outW,
       canvasH: outH,
       lineColor: '#1f2937',
-      fontSizePx: 16.5,
+      fontSizePx: 13.5,
     })
   }
 
-  // (ب) الارتفاع الكلي (Height - Y) على الجانب الأيسر للقطعة
+  // (ب) الارتفاع الكلي (Height - Y): يسار أو يمين مع إزاحة إضافية عند مشاركة العمق نفس الجهة
+  const sameSideHeightAndDepth = placement.heightSide === placement.depthSide
   const verticalCandidates: [number, number][] = [
     [minX, frontZ],
     [maxX, frontZ],
     [minX, backZ],
     [maxX, backZ],
   ]
-  let leftHeightEdge = {
-    bot: projectPoint(minX, minY, frontZ, camera, outW, outH),
-    top: projectPoint(minX, maxY, frontZ, camera, outW, outH),
-    worldX: minX,
-    worldZ: frontZ,
-    minScreenX: Infinity,
-  }
+  let chosenHeightEdge: {
+    bot: Point2D
+    top: Point2D
+    worldX: number
+    worldZ: number
+    avgX: number
+  } | null = null
+
   for (const [vx, vz] of verticalCandidates) {
     const bot = projectPoint(vx, minY, vz, camera, outW, outH)
     const top = projectPoint(vx, maxY, vz, camera, outW, outH)
     if (bot.ndcZ > 1 || top.ndcZ > 1) continue
     const avgX = (bot.x + top.x) / 2
-    if (avgX < leftHeightEdge.minScreenX) {
-      leftHeightEdge = { bot, top, worldX: vx, worldZ: vz, minScreenX: avgX }
+    if (
+      !chosenHeightEdge ||
+      (placement.heightSide === 'left'
+        ? avgX < chosenHeightEdge.avgX
+        : avgX > chosenHeightEdge.avgX)
+    ) {
+      chosenHeightEdge = { bot, top, worldX: vx, worldZ: vz, avgX }
     }
   }
-  if (leftHeightEdge.minScreenX < Infinity) {
+
+  if (chosenHeightEdge) {
     drawCleanDimensionLine({
       ctx,
-      p1: leftHeightEdge.bot,
-      p2: leftHeightEdge.top,
-      outwardNormalX: -1,
+      p1: chosenHeightEdge.bot,
+      p2: chosenHeightEdge.top,
+      outwardNormalX: placement.heightSide === 'left' ? -1 : 1,
       outwardNormalY: 0,
-      offsetPx: 62 * scale,
+      offsetPx: (sameSideHeightAndDepth ? 96 : 62) * scale,
       label: formatEnCm(height),
       scale,
       canvasW: outW,
       canvasH: outH,
       lineColor: '#1f2937',
-      fontSizePx: 16.5,
+      fontSizePx: 13.5,
     })
   }
 
-  // (ج) العمق الكلي (Depth - Z) على الجانب الأيمن السفلي للقطعة
+  // (ج) العمق الكلي (Depth - Z): يمين أو يسار
   const depthCandidates = [minX, maxX].map((vx) => {
     const a = projectPoint(vx, minY, minZ, camera, outW, outH)
     const b = projectPoint(vx, minY, maxZ, camera, outW, outH)
@@ -361,7 +395,10 @@ export function drawEcommerceDimensionsOnCanvas(
     const len = Math.hypot(b.x - a.x, b.y - a.y)
     return { vx, a, b, avgX, len }
   })
-  const bestDepthEdge = depthCandidates.sort((p, q) => q.avgX - p.avgX)[0]
+  const sortedDepth = depthCandidates.sort((p, q) =>
+    placement.depthSide === 'left' ? p.avgX - q.avgX : q.avgX - p.avgX
+  )
+  const bestDepthEdge = sortedDepth[0]
   if (
     bestDepthEdge &&
     bestDepthEdge.a.ndcZ <= 1 &&
@@ -375,13 +412,13 @@ export function drawEcommerceDimensionsOnCanvas(
       p2: bestDepthEdge.b,
       outwardNormalX: nD.nx,
       outwardNormalY: nD.ny,
-      offsetPx: 54 * scale,
+      offsetPx: (sameSideHeightAndDepth ? 44 : 54) * scale,
       label: formatEnCm(depth),
       scale,
       canvasW: outW,
       canvasH: outH,
       lineColor: '#1f2937',
-      fontSizePx: 16.5,
+      fontSizePx: 13.5,
     })
   }
 
@@ -400,7 +437,7 @@ export function drawEcommerceDimensionsOnCanvas(
     }
     const baseHeight = roundTo(baseMaxY - baseMinY, 1)
     if (baseHeight >= 3 && baseHeight < height - 5) {
-      const oppX = leftHeightEdge.worldX === minX ? maxX : minX
+      const oppX = chosenHeightEdge?.worldX === minX ? maxX : minX
       const b1 = projectPoint(oppX, baseMinY, frontZ, camera, outW, outH)
       const b2 = projectPoint(oppX, baseMaxY, frontZ, camera, outW, outH)
       if (b1.ndcZ <= 1 && b2.ndcZ <= 1) {
@@ -417,7 +454,7 @@ export function drawEcommerceDimensionsOnCanvas(
           canvasW: outW,
           canvasH: outH,
           lineColor: '#475569',
-          fontSizePx: 13.5,
+          fontSizePx: 11,
         })
       }
     }
@@ -454,7 +491,7 @@ export function drawEcommerceDimensionsOnCanvas(
           canvasW: outW,
           canvasH: outH,
           lineColor: '#334155',
-          fontSizePx: 13,
+          fontSizePx: 10.5,
           labelSide: 'center',
           softHalo: true,
         })
@@ -552,7 +589,7 @@ export function drawEcommerceDimensionsOnCanvas(
           canvasW: outW,
           canvasH: outH,
           lineColor: '#334155',
-          fontSizePx: 13.5,
+          fontSizePx: 11,
           labelSide: 'center',
           softHalo: true,
         })
@@ -564,7 +601,8 @@ export function drawEcommerceDimensionsOnCanvas(
 
 export function composeEcommerceProductPng(
   snapshot: EcommerceCaptureSnapshot,
-  showInternalDimensions: boolean
+  showInternalDimensions: boolean,
+  placement: DimensionPlacement = DEFAULT_DIMENSION_PLACEMENT
 ): string {
   const outCanvas = document.createElement('canvas')
   outCanvas.width = snapshot.width
@@ -574,6 +612,6 @@ export function composeEcommerceProductPng(
     return snapshot.baseCanvas.toDataURL('image/png', 1.0)
   }
 
-  drawEcommerceDimensionsOnCanvas(ctx, snapshot, showInternalDimensions)
+  drawEcommerceDimensionsOnCanvas(ctx, snapshot, showInternalDimensions, placement)
   return outCanvas.toDataURL('image/png', 1.0)
 }

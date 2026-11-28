@@ -295,6 +295,13 @@ export function sanitizeGuides(raw: unknown): GuideLine[] {
       spanStart: obj.spanStart,
       spanEnd: obj.spanEnd,
       labelPosition: obj.labelPosition,
+      ...(obj.kind === 'point' || obj.kind === 'edge' ? { kind: obj.kind } : {}),
+      ...(isVec3(obj.measureStart) ? { measureStart: obj.measureStart } : {}),
+      ...(isVec3(obj.measureEnd) ? { measureEnd: obj.measureEnd } : {}),
+      ...(isVec3(obj.unitDir) ? { unitDir: obj.unitDir } : {}),
+      ...(obj.lockedAxis === null || isAxis(obj.lockedAxis)
+        ? { lockedAxis: obj.lockedAxis }
+        : {}),
     })
   }
   return result

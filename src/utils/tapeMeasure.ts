@@ -406,3 +406,229 @@ export function formatDirectionLabel(offsetAxis: Axis, direction: 1 | -1): strin
   if (offsetAxis === 'x') return direction === 1 ? 'لليمين (+X)' : 'لليسار (-X)'
   return direction === 1 ? 'للأمام (+Z)' : 'للخلف (-Z)'
 }
+
+export interface AxisLockedMeasureResult {
+  end: Vec3
+  unitDir: Vec3
+  lockedAxis: Axis | null
+  distanceCm: number
+}
+
+export function getAxisColor(axis: Axis | null): string {
+  if (axis === 'x') return '#f43f5e'
+  if (axis === 'y') return '#22c55e'
+  if (axis === 'z') return '#38bdf8'
+  return '#fbbf24'
+}
+
+export function getAxisLabelAr(axis: Axis | null): string {
+  if (axis === 'x') return 'محور X (عرض)'
+  if (axis === 'y') return 'محور Y (ارتفاع)'
+  if (axis === 'z') return 'محور Z (عمق)'
+  return 'قياس حر'
+}
+
+/**
+ * يحسب نقطة النهاية مع قفل تلقائي على المحاور (X / Y / Z)
+ * يحافظ على الزوايا ومنتصفات الحواف بدقة، ويقفل تلقائياً على المحور القريب في السحب الحر
+ */
+export function computeAxisLockedMeasureTarget(
+  start: Vec3,
+  rawTarget: Vec3,
+  isExactFeatureSnap: boolean
+): AxisLockedMeasureResult {
+  const dx = rawTarget[0] - start[0]
+  const dy = rawTarget[1] - start[1]
+  const dz = rawTarget[2] - start[2]
+  const totalDist = Math.hypot(dx, dy, dz)
+
+  if (totalDist < 0.05) {
+    return {
+      end: [...start],
+      unitDir: [1, 0, 0],
+      lockedAxis: null,
+      distanceCm: 0,
+    }
+  }
+
+  const ax = Math.abs(dx)
+  const ay = Math.abs(dy)
+  const az = Math.abs(dz)
+
+  let dominantAxis: Axis = 'x'
+  let dominantAbs = ax
+  let minorMax = Math.max(ay, az)
+  if (ay > dominantAbs) {
+    dominantAxis = 'y'
+    dominantAbs = ay
+    minorMax = Math.max(ax, az)
+  }
+  if (az > dominantAbs) {
+    dominantAxis = 'z'
+    dominantAbs = az
+    minorMax = Math.max(ax, ay)
+  }
+
+  if (isExactFeatureSnap) {
+    const alignedToAxis = minorMax <= 0.15
+    return {
+      end: [
+        roundTo(rawTarget[0], 2),
+        roundTo(rawTarget[1], 2),
+        roundTo(rawTarget[2], 2),
+      ],
+      unitDir: [dx / totalDist, dy / totalDist, dz / totalDist],
+      lockedAxis: alignedToAxis ? dominantAxis : null,
+      distanceCm: roundTo(totalDist, 2),
+    }
+  }
+
+  const ratio = dominantAbs / totalDist
+  const shouldLock = ratio >= 0.88 && minorMax <= Math.max(1.5, dominantAbs * 0.25)
+
+  if (shouldLock) {
+    const sign =
+      dominantAxis === 'x'
+        ? dx >= 0
+          ? 1
+          : -1
+        : dominantAxis === 'y'
+          ? dy >= 0
+            ? 1
+            : -1
+          : dz >= 0
+            ? 1
+            : -1
+    const snappedLen = roundTo(Math.round(dominantAbs * 10) / 10, 2)
+    return {
+      end: [
+        dominantAxis === 'x' ? roundTo(start[0] + sign * snappedLen, 2) : start[0],
+        dominantAxis === 'y' ? roundTo(start[1] + sign * snappedLen, 2) : start[1],
+        dominantAxis === 'z' ? roundTo(start[2] + sign * snappedLen, 2) : start[2],
+      ],
+      unitDir: [
+        dominantAxis === 'x' ? sign : 0,
+        dominantAxis === 'y' ? sign : 0,
+        dominantAxis === 'z' ? sign : 0,
+      ],
+      lockedAxis: dominantAxis,
+      distanceCm: snappedLen,
+    }
+  }
+
+  return {
+    end: [
+      roundTo(rawTarget[0], 2),
+      roundTo(rawTarget[1], 2),
+      roundTo(rawTarget[2], 2),
+    ],
+    unitDir: [dx / totalDist, dy / totalDist, dz / totalDist],
+    lockedAxis: null,
+    distanceCm: roundTo(totalDist, 2),
+  }
+}
+
+export function buildPointGuideGeometry(params: {
+  id: string
+  start: Vec3
+  end: Vec3
+  unitDir?: Vec3
+  lockedAxis?: Axis | null
+}): GuideLine {
+  const dx = params.end[0] - params.start[0]
+  const dy = params.end[1] - params.start[1]
+  const dz = params.end[2] - params.start[2]
+  const dist = roundTo(Math.hypot(dx, dy, dz), 2)
+
+  let unitDir: Vec3 = params.unitDir ?? [1, 0, 0]
+  if (!params.unitDir && dist > 0.001) {
+    unitDir = [dx / dist, dy / dist, dz / dist]
+  }
+
+  let lockedAxis = params.lockedAxis ?? null
+  if (lockedAxis === null && dist > 0.01) {
+    const ax = Math.abs(dx)
+    const ay = Math.abs(dy)
+    const az = Math.abs(dz)
+    if (ax > ay && ax > az && Math.max(ay, az) <= 0.15) lockedAxis = 'x'
+    else if (ay > ax && ay > az && Math.max(ax, az) <= 0.15) lockedAxis = 'y'
+    else if (az > ax && az > ay && Math.max(ax, ay) <= 0.15) lockedAxis = 'z'
+  }
+
+  const offsetAxis: Axis = lockedAxis ?? 'y'
+  const axisIdx = offsetAxis === 'x' ? 0 : offsetAxis === 'y' ? 1 : 2
+  const direction: 1 | -1 = unitDir[axisIdx] < 0 ? -1 : 1
+  const lineAxis: Axis = offsetAxis === 'x' ? 'z' : 'x'
+  const normalAxis: Axis = offsetAxis === 'z' ? 'y' : 'z'
+
+  const spanStart: Vec3 = [
+    roundTo(params.start[0], 2),
+    roundTo(params.start[1], 2),
+    roundTo(params.start[2], 2),
+  ]
+  const spanEnd: Vec3 = [
+    roundTo(params.end[0], 2),
+    roundTo(params.end[1], 2),
+    roundTo(params.end[2], 2),
+  ]
+  const labelPosition: Vec3 = [
+    roundTo((spanStart[0] + spanEnd[0]) / 2, 2),
+    roundTo((spanStart[1] + spanEnd[1]) / 2, 2),
+    roundTo((spanStart[2] + spanEnd[2]) / 2, 2),
+  ]
+
+  return {
+    id: params.id,
+    kind: 'point',
+    measureStart: spanStart,
+    measureEnd: spanEnd,
+    unitDir,
+    lockedAxis,
+    panelId: '',
+    panelName: 'قياس حر',
+    edgeLabel: getAxisLabelAr(lockedAxis),
+    lineAxis,
+    offsetAxis,
+    normalAxis,
+    surfaceCoord: 0,
+    surfaceSign: 1,
+    referenceEdgeCoord: spanStart[axisIdx],
+    direction,
+    distanceCm: dist,
+    worldCoord: spanEnd[axisIdx],
+    spanMin: Math.min(spanStart[axisIdx], spanEnd[axisIdx]),
+    spanMax: Math.max(spanStart[axisIdx], spanEnd[axisIdx]),
+    spanStart,
+    spanEnd,
+    labelPosition,
+  }
+}
+
+export function updatePointGuideDistance(guide: GuideLine, nextDistanceCm: number): GuideLine {
+  const safe = Math.max(0, roundTo(nextDistanceCm, 2))
+  const start = guide.measureStart ?? guide.spanStart
+  const rawEnd = guide.measureEnd ?? guide.spanEnd
+  let dir = guide.unitDir
+
+  if (!dir) {
+    const dx = rawEnd[0] - start[0]
+    const dy = rawEnd[1] - start[1]
+    const dz = rawEnd[2] - start[2]
+    const len = Math.hypot(dx, dy, dz)
+    dir = len > 0.001 ? [dx / len, dy / len, dz / len] : [1, 0, 0]
+  }
+
+  const nextEnd: Vec3 = [
+    roundTo(start[0] + dir[0] * safe, 2),
+    roundTo(start[1] + dir[1] * safe, 2),
+    roundTo(start[2] + dir[2] * safe, 2),
+  ]
+
+  return buildPointGuideGeometry({
+    id: guide.id,
+    start,
+    end: nextEnd,
+    unitDir: dir,
+    lockedAxis: guide.lockedAxis ?? null,
+  })
+}

@@ -6,6 +6,9 @@ import { useDesignStore } from '../../store/useDesignStore'
 import type { FurniturePanel, Vec3 } from '../../types/furniture'
 import { roundTo } from '../../utils/snapping'
 import {
+  computeAxisLockedMeasureTarget,
+  getAxisColor,
+  getAxisLabelAr,
   pickReferenceEdgeFromHit,
   snapPointToPanelFeatures,
   type ReferenceEdge,
@@ -37,27 +40,24 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
   const toolMode = useDesignStore((s) => s.toolMode)
   const tapeMode = useDesignStore((s) => s.tapeMode)
   const panels = useDesignStore((s) => s.panels)
+  const tapeMeasureDraft = useDesignStore((s) => s.tapeMeasureDraft)
+
   const setIsDraggingTape = useDesignStore((s) => s.setIsDraggingTape)
   const setActiveReferenceEdge = useDesignStore((s) => s.setActiveReferenceEdge)
   const setDraftGuideParams = useDesignStore((s) => s.setDraftGuideParams)
   const commitDraftGuide = useDesignStore((s) => s.commitDraftGuide)
+  const setTapeMeasureDraft = useDesignStore((s) => s.setTapeMeasureDraft)
+  const addPointGuide = useDesignStore((s) => s.addPointGuide)
 
   const [hoverEdge, setHoverEdge] = useState<ReferenceEdge | null>(null)
   const [hoverSnapPoint, setHoverSnapPoint] = useState<SnappedMeasurePoint | null>(null)
-  const [measureStart, setMeasureStart] = useState<Vec3 | null>(null)
-  const [measureEnd, setMeasureEnd] = useState<Vec3 | null>(null)
 
   const dragStateRef = useRef<DragTapeState | null>(null)
-  const measureEndRef = useRef<Vec3 | null>(null)
+  const emptyDownRef = useRef<{ x: number; y: number } | null>(null)
   const raycasterRef = useRef(new THREE.Raycaster())
   const ndcRef = useRef(new THREE.Vector2())
   const normalMatrixRef = useRef(new THREE.Matrix3())
 
-  useEffect(() => {
-    measureEndRef.current = measureEnd
-  }, [measureEnd])
-
-  // مزامنة فورية لـ OrbitControls + إدارة السحب عبر مستوى الوجه
   useEffect(() => {
     const syncOrbitEnabled = (enabled: boolean) => {
       const ctrl = get().controls as { enabled?: boolean } | null
@@ -69,6 +69,7 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
 
     if (toolMode !== 'tape') {
       dragStateRef.current = null
+      emptyDownRef.current = null
       handlersRef.current = null
       syncOrbitEnabled(true)
       return
@@ -92,25 +93,110 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
       return new THREE.Plane().setFromNormalAndCoplanarPoint(normalVec, hitPoint.clone())
     }
 
-    const hasPanelUnderClientPoint = (clientX: number, clientY: number): boolean => {
+    const isDescendantOf = (obj: THREE.Object3D, root: THREE.Object3D): boolean => {
+      let curr: THREE.Object3D | null = obj
+      while (curr) {
+        if (curr === root) return true
+        curr = curr.parent
+      }
+      return false
+    }
+
+    const raycastPanelsAtClient = (
+      clientX: number,
+      clientY: number
+    ): { panel: FurniturePanel; point: THREE.Vector3 } | null => {
       const rect = dom.getBoundingClientRect()
       ndcRef.current.x = ((clientX - rect.left) / rect.width) * 2 - 1
       ndcRef.current.y = -((clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(ndcRef.current, camera)
       const roots = Object.values(objectMap)
-      if (roots.length === 0) return false
+      if (roots.length === 0) return null
+
       const hits = raycaster.intersectObjects(roots, true)
-      return hits.some((h) => {
+      const validHit = hits.find((h) => {
         const mat = (h.object as THREE.Mesh).material as THREE.Material | undefined
         return !(mat && mat.transparent && mat.opacity === 0)
       })
+      if (!validHit) return null
+
+      const panelId = Object.keys(objectMap).find((id) =>
+        isDescendantOf(validHit.object, objectMap[id])
+      )
+      if (!panelId) return null
+      const panel = panels.find((p) => p.id === panelId)
+      if (!panel) return null
+      return { panel, point: validHit.point }
     }
 
-    // تعطيل OrbitControls لحظياً قبل معالج pointerdown الخاص بها عند لمس أي لوح
+    const computeMeasureTargetAtClient = (
+      clientX: number,
+      clientY: number,
+      start: Vec3
+    ) => {
+      const panelHit = raycastPanelsAtClient(clientX, clientY)
+      if (panelHit) {
+        const snapped = snapPointToPanelFeatures(panelHit.panel, panelHit.point)
+        const isExact = snapped.snapKind === 'corner' || snapped.snapKind === 'midpoint'
+        const locked = computeAxisLockedMeasureTarget(start, snapped.point, isExact)
+        setHoverSnapPoint(
+          isExact
+            ? snapped
+            : {
+                point: locked.end,
+                snapKind: 'surface',
+                label: locked.lockedAxis ? getAxisLabelAr(locked.lockedAxis) : snapped.label,
+              }
+        )
+        return locked
+      }
+
+      // القياس الحر في الفراغ عبر مستوى يمر بنقطة البداية ويواجه الكاميرا
+      const rect = dom.getBoundingClientRect()
+      ndcRef.current.x = ((clientX - rect.left) / rect.width) * 2 - 1
+      ndcRef.current.y = -((clientY - rect.top) / rect.height) * 2 + 1
+      raycaster.setFromCamera(ndcRef.current, camera)
+
+      const camDir = new THREE.Vector3()
+      camera.getWorldDirection(camDir)
+      const planeNormal = camDir.negate()
+      if (planeNormal.lengthSq() < 0.0001) {
+        planeNormal.set(0, 1, 0)
+      }
+      const workPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+        planeNormal.normalize(),
+        new THREE.Vector3(start[0], start[1], start[2])
+      )
+
+      const hitOnPlane = new THREE.Vector3()
+      let ok = raycaster.ray.intersectPlane(workPlane, hitOnPlane)
+      if (!ok) {
+        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+        ok = raycaster.ray.intersectPlane(floorPlane, hitOnPlane)
+      }
+      if (!ok) return null
+
+      const locked = computeAxisLockedMeasureTarget(
+        start,
+        [hitOnPlane.x, hitOnPlane.y, hitOnPlane.z],
+        false
+      )
+      setHoverSnapPoint({
+        point: locked.end,
+        snapKind: 'surface',
+        label: getAxisLabelAr(locked.lockedAxis),
+      })
+      return locked
+    }
+
     const onDomPointerDownCapture = (e: PointerEvent) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return
-      if (hasPanelUnderClientPoint(e.clientX, e.clientY)) {
+      const hitPanel = raycastPanelsAtClient(e.clientX, e.clientY)
+      if (hitPanel) {
         syncOrbitEnabled(false)
+        emptyDownRef.current = null
+      } else if (e.target === dom && tapeMode === 'measure' && useDesignStore.getState().tapeMeasureDraft) {
+        emptyDownRef.current = { x: e.clientX, y: e.clientY }
       }
     }
 
@@ -146,10 +232,26 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
     const onWindowPointerMove = (e: PointerEvent) => {
       if (dragStateRef.current) {
         updateDragFromPointer(e.clientX, e.clientY)
+        return
+      }
+
+      const activeDraft = useDesignStore.getState().tapeMeasureDraft
+      if (tapeMode === 'measure' && activeDraft) {
+        if (e.target !== dom) return
+        const locked = computeMeasureTargetAtClient(e.clientX, e.clientY, activeDraft.start)
+        if (locked) {
+          setTapeMeasureDraft({
+            start: activeDraft.start,
+            end: locked.end,
+            unitDir: locked.unitDir,
+            lockedAxis: locked.lockedAxis,
+            distanceCm: locked.distanceCm,
+          })
+        }
       }
     }
 
-    const onWindowPointerUp = () => {
+    const onWindowPointerUp = (e: PointerEvent) => {
       const drag = dragStateRef.current
       if (drag) {
         dragStateRef.current = null
@@ -160,6 +262,20 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
         }
         return
       }
+
+      if (emptyDownRef.current) {
+        const down = emptyDownRef.current
+        emptyDownRef.current = null
+        const movedPx = Math.hypot(e.clientX - down.x, e.clientY - down.y)
+        const activeDraft = useDesignStore.getState().tapeMeasureDraft
+        if (movedPx <= 6 && tapeMode === 'measure' && activeDraft) {
+          const locked = computeMeasureTargetAtClient(e.clientX, e.clientY, activeDraft.start)
+          if (locked && locked.distanceCm >= 0.05) {
+            addPointGuide(activeDraft.start, locked.end, locked.lockedAxis, locked.unitDir)
+          }
+        }
+      }
+
       syncOrbitEnabled(true)
     }
 
@@ -180,17 +296,30 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
             startClientY: e.nativeEvent.clientY,
             didDrag: false,
           }
-        } else {
-          const snapped = snapPointToPanelFeatures(panel, e.point)
-          setHoverSnapPoint(snapped)
-          setMeasureStart((prevStart) => {
-            if (!prevStart || measureEndRef.current !== null) {
-              setMeasureEnd(null)
-              return snapped.point
-            }
-            setMeasureEnd(snapped.point)
-            return prevStart
+          return
+        }
+
+        const snapped = snapPointToPanelFeatures(panel, e.point)
+        setHoverSnapPoint(snapped)
+
+        const activeDraft = useDesignStore.getState().tapeMeasureDraft
+        if (!activeDraft) {
+          setTapeMeasureDraft({
+            start: snapped.point,
+            end: snapped.point,
+            unitDir: [1, 0, 0],
+            lockedAxis: null,
+            distanceCm: 0,
           })
+          return
+        }
+
+        const isExact = snapped.snapKind === 'corner' || snapped.snapKind === 'midpoint'
+        const locked = computeAxisLockedMeasureTarget(activeDraft.start, snapped.point, isExact)
+        if (locked.distanceCm >= 0.05) {
+          addPointGuide(activeDraft.start, locked.end, locked.lockedAxis, locked.unitDir)
+        } else {
+          setTapeMeasureDraft(null)
         }
       },
       onPanelPointerMove: (panel, e) => {
@@ -201,15 +330,43 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
           const worldNormal = getWorldNormal(e)
           setHoverEdge(pickReferenceEdgeFromHit(panel, e.point, worldNormal))
           setHoverSnapPoint(null)
-        } else {
-          setHoverSnapPoint(snapPointToPanelFeatures(panel, e.point))
-          setHoverEdge(null)
+          return
         }
+
+        setHoverEdge(null)
+        const snapped = snapPointToPanelFeatures(panel, e.point)
+        const activeDraft = useDesignStore.getState().tapeMeasureDraft
+
+        if (!activeDraft) {
+          setHoverSnapPoint(snapped)
+          return
+        }
+
+        const isExact = snapped.snapKind === 'corner' || snapped.snapKind === 'midpoint'
+        const locked = computeAxisLockedMeasureTarget(activeDraft.start, snapped.point, isExact)
+        setHoverSnapPoint(
+          isExact
+            ? snapped
+            : {
+                point: locked.end,
+                snapKind: 'surface',
+                label: locked.lockedAxis ? getAxisLabelAr(locked.lockedAxis) : snapped.label,
+              }
+        )
+        setTapeMeasureDraft({
+          start: activeDraft.start,
+          end: locked.end,
+          unitDir: locked.unitDir,
+          lockedAxis: locked.lockedAxis,
+          distanceCm: locked.distanceCm,
+        })
       },
       onPanelPointerOut: () => {
         if (dragStateRef.current) return
         setHoverEdge(null)
-        setHoverSnapPoint(null)
+        if (!useDesignStore.getState().tapeMeasureDraft) {
+          setHoverSnapPoint(null)
+        }
       },
     }
 
@@ -225,6 +382,7 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
       window.removeEventListener('pointercancel', onWindowPointerUp)
       handlersRef.current = null
       dragStateRef.current = null
+      emptyDownRef.current = null
       syncOrbitEnabled(true)
     }
   }, [
@@ -240,50 +398,55 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
     setActiveReferenceEdge,
     setDraftGuideParams,
     commitDraftGuide,
+    setTapeMeasureDraft,
+    addPointGuide,
   ])
 
   if (toolMode !== 'tape') return null
 
-  const activeMeasureTarget = measureEnd ?? hoverSnapPoint?.point ?? null
-  const showMeasureLine = tapeMode === 'measure' && measureStart && activeMeasureTarget
+  const activeColor = tapeMeasureDraft ? getAxisColor(tapeMeasureDraft.lockedAxis) : '#fbbf24'
+  const showMeasureLine =
+    tapeMode === 'measure' &&
+    tapeMeasureDraft !== null &&
+    tapeMeasureDraft.distanceCm >= 0.05
 
-  let measureDist = 0
-  let dx = 0
-  let dy = 0
-  let dz = 0
-  let measureMid: Vec3 = [0, 0, 0]
+  const measureMid: Vec3 = tapeMeasureDraft
+    ? [
+        (tapeMeasureDraft.start[0] + tapeMeasureDraft.end[0]) / 2,
+        (tapeMeasureDraft.start[1] + tapeMeasureDraft.end[1]) / 2,
+        (tapeMeasureDraft.start[2] + tapeMeasureDraft.end[2]) / 2,
+      ]
+    : [0, 0, 0]
 
-  if (showMeasureLine && measureStart && activeMeasureTarget) {
-    dx = roundTo(Math.abs(activeMeasureTarget[0] - measureStart[0]), 1)
-    dy = roundTo(Math.abs(activeMeasureTarget[1] - measureStart[1]), 1)
-    dz = roundTo(Math.abs(activeMeasureTarget[2] - measureStart[2]), 1)
-    measureDist = roundTo(Math.hypot(dx, dy, dz), 1)
-    measureMid = [
-      (measureStart[0] + activeMeasureTarget[0]) / 2,
-      (measureStart[1] + activeMeasureTarget[1]) / 2,
-      (measureStart[2] + activeMeasureTarget[2]) / 2,
-    ]
-  }
+  const dx = tapeMeasureDraft
+    ? roundTo(Math.abs(tapeMeasureDraft.end[0] - tapeMeasureDraft.start[0]), 1)
+    : 0
+  const dy = tapeMeasureDraft
+    ? roundTo(Math.abs(tapeMeasureDraft.end[1] - tapeMeasureDraft.start[1]), 1)
+    : 0
+  const dz = tapeMeasureDraft
+    ? roundTo(Math.abs(tapeMeasureDraft.end[2] - tapeMeasureDraft.start[2]), 1)
+    : 0
 
   return (
     <group>
-      {/* تمييز الحافة المرجعية المضيء عند التحويم في وضع العلام */}
+      {/* تمييز الحافة المرجعية المضيء عند التحويم في وضع العلام من حافة */}
       {tapeMode === 'guide' && hoverEdge && (
         <Line points={[hoverEdge.edgeStart, hoverEdge.edgeEnd]} color="#22d3ee" lineWidth={4} />
       )}
 
-      {/* مؤشر الالتقاط الذكي في وضع القياس */}
+      {/* مؤشر الالتقاط الذكي بالزوايا ومنتصفات الحواف */}
       {tapeMode === 'measure' && hoverSnapPoint && (
         <group position={hoverSnapPoint.point}>
           <mesh>
-            <sphereGeometry args={[1.25, 16, 16]} />
+            <sphereGeometry args={[1.15, 16, 16]} />
             <meshBasicMaterial
               color={
                 hoverSnapPoint.snapKind === 'corner'
                   ? '#fbbf24'
                   : hoverSnapPoint.snapKind === 'midpoint'
                     ? '#22d3ee'
-                    : '#34d399'
+                    : activeColor
               }
             />
           </mesh>
@@ -291,32 +454,40 @@ export function TapeMeasureTool({ objectMap, handlersRef }: TapeMeasureToolProps
       )}
 
       {/* نقطة بداية القياس */}
-      {tapeMode === 'measure' && measureStart && (
-        <mesh position={measureStart}>
-          <sphereGeometry args={[1.35, 16, 16]} />
+      {tapeMode === 'measure' && tapeMeasureDraft && (
+        <mesh position={tapeMeasureDraft.start}>
+          <sphereGeometry args={[1.3, 16, 16]} />
           <meshBasicMaterial color="#fbbf24" />
         </mesh>
       )}
 
-      {/* نقطة نهاية القياس */}
-      {tapeMode === 'measure' && measureEnd && (
-        <mesh position={measureEnd}>
-          <sphereGeometry args={[1.35, 16, 16]} />
-          <meshBasicMaterial color="#fbbf24" />
-        </mesh>
-      )}
-
-      {/* خط القياس المؤقت والنتيجة */}
-      {showMeasureLine && measureStart && activeMeasureTarget && (
+      {/* خط المعاينة المتقطع الحي + قراءة المسافة بالـ سم */}
+      {showMeasureLine && tapeMeasureDraft && (
         <group>
-          <Line points={[measureStart, activeMeasureTarget]} color="#fbbf24" lineWidth={2.8} />
-          <Html position={measureMid} center distanceFactor={200} zIndexRange={[10, 0]}>
-            <div className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-xl border border-amber-400 bg-slate-950/95 px-2.5 py-1 text-center shadow-xl">
-              <div className="text-xs font-extrabold text-amber-300">
-                المسافة: {measureDist} سم
+          <Line
+            points={[tapeMeasureDraft.start, tapeMeasureDraft.end]}
+            color={activeColor}
+            lineWidth={3}
+            dashed
+            dashSize={2.2}
+            gapSize={1.2}
+          />
+          <mesh position={tapeMeasureDraft.end}>
+            <sphereGeometry args={[1.2, 16, 16]} />
+            <meshBasicMaterial color={activeColor} />
+          </mesh>
+          <Html position={measureMid} center distanceFactor={135} zIndexRange={[10, 0]}>
+            <div
+              className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-md border bg-slate-950/95 px-2 py-0.5 text-center shadow-sm backdrop-blur-sm"
+              style={{ borderColor: activeColor }}
+            >
+              <div className="text-[11px] font-extrabold leading-tight" style={{ color: activeColor }}>
+                {tapeMeasureDraft.distanceCm} سم
               </div>
-              <div className="text-[10px] text-slate-300">
-                X:{dx} · Y:{dy} · Z:{dz}
+              <div className="text-[9px] font-semibold text-slate-300">
+                {tapeMeasureDraft.lockedAxis
+                  ? getAxisLabelAr(tapeMeasureDraft.lockedAxis)
+                  : `X:${dx} · Y:${dy} · Z:${dz}`}
               </div>
             </div>
           </Html>

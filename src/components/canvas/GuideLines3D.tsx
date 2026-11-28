@@ -1,17 +1,28 @@
 import { Html, Line } from '@react-three/drei'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import * as THREE from 'three'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { GuideLine, Vec3 } from '../../types/furniture'
-import { buildGuideLineGeometry } from '../../utils/tapeMeasure'
+import { buildGuideLineGeometry, getAxisColor } from '../../utils/tapeMeasure'
 
 interface SingleGuideProps {
   guide: GuideLine
   isSelected: boolean
   onSelect: (id: string) => void
+  onUpdateDistance: (id: string, distanceCm: number) => void
+  onDelete: (id: string) => void
 }
 
-function SingleGuide({ guide, isSelected, onSelect }: SingleGuideProps) {
+function SingleGuide({
+  guide,
+  isSelected,
+  onSelect,
+  onUpdateDistance,
+  onDelete,
+}: SingleGuideProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftVal, setDraftVal] = useState(String(guide.distanceCm))
+
   const { hitPos, hitQuat, hitLen } = useMemo(() => {
     const start = new THREE.Vector3(...guide.spanStart)
     const end = new THREE.Vector3(...guide.spanEnd)
@@ -20,29 +31,55 @@ function SingleGuide({ guide, isSelected, onSelect }: SingleGuideProps) {
     const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
     const quat = new THREE.Quaternion().setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      dir.clone().normalize()
+      len > 0.001 ? dir.clone().normalize() : new THREE.Vector3(0, 1, 0)
     )
     return { hitPos: mid, hitQuat: quat, hitLen: len }
   }, [guide.spanStart, guide.spanEnd])
+
+  const lineColor = isSelected
+    ? '#fbbf24'
+    : guide.kind === 'point'
+      ? getAxisColor(guide.lockedAxis ?? null)
+      : '#22d3ee'
+
+  const commitInlineEdit = () => {
+    setIsEditing(false)
+    const parsed = Number.parseFloat(draftVal)
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      onUpdateDistance(guide.id, parsed)
+    }
+  }
 
   return (
     <group name="workspace-guides-group">
       <Line
         points={[guide.spanStart, guide.spanEnd]}
-        color={isSelected ? '#fbbf24' : '#22d3ee'}
-        lineWidth={isSelected ? 3 : 2}
+        color={lineColor}
+        lineWidth={isSelected ? 3 : 2.2}
         dashed
         dashSize={2.4}
         gapSize={1.4}
       />
 
-      {/* نقطة ارتكاز صغيرة على منتصف العلام */}
-      <mesh position={guide.labelPosition}>
-        <sphereGeometry args={[isSelected ? 1.1 : 0.75, 12, 12]} />
-        <meshBasicMaterial color={isSelected ? '#fbbf24' : '#22d3ee'} />
-      </mesh>
+      {guide.kind === 'point' ? (
+        <>
+          <mesh position={guide.spanStart}>
+            <sphereGeometry args={[isSelected ? 1.05 : 0.75, 12, 12]} />
+            <meshBasicMaterial color={lineColor} />
+          </mesh>
+          <mesh position={guide.spanEnd}>
+            <sphereGeometry args={[isSelected ? 1.05 : 0.75, 12, 12]} />
+            <meshBasicMaterial color={lineColor} />
+          </mesh>
+        </>
+      ) : (
+        <mesh position={guide.labelPosition}>
+          <sphereGeometry args={[isSelected ? 1.1 : 0.75, 12, 12]} />
+          <meshBasicMaterial color={lineColor} />
+        </mesh>
+      )}
 
-      {/* منطقة ضغط غير مرئية عريضة لتسهيل تحديد العلام باللمس */}
+      {/* منطقة ضغط غير مرئية لتسهيل التحديد */}
       <mesh
         position={hitPos}
         quaternion={hitQuat}
@@ -55,21 +92,72 @@ function SingleGuide({ guide, isSelected, onSelect }: SingleGuideProps) {
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      <Html position={guide.labelPosition} center distanceFactor={210} zIndexRange={[8, 0]}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onSelect(guide.id)
-          }}
-          className={`tabular-nums select-none whitespace-nowrap rounded-lg border px-2 py-0.5 text-[11px] font-bold shadow-md backdrop-blur-sm transition ${
+      <Html position={guide.labelPosition} center distanceFactor={135} zIndexRange={[12, 0]}>
+        <div
+          className={`pointer-events-auto flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-sm transition ${
             isSelected
               ? 'border-amber-400 bg-amber-500 text-slate-950'
-              : 'border-cyan-400/70 bg-slate-950/90 text-cyan-200 hover:border-amber-400'
+              : 'border-cyan-400/70 bg-slate-950/90 text-cyan-100 hover:border-amber-400'
           }`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
-          علام: {guide.distanceCm} سم
-        </button>
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.1"
+                min={0}
+                max={999}
+                autoFocus
+                value={draftVal}
+                onChange={(e) => setDraftVal(e.target.value)}
+                onBlur={commitInlineEdit}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') {
+                    commitInlineEdit()
+                  } else if (e.key === 'Escape') {
+                    setIsEditing(false)
+                  }
+                }}
+                className="tabular-nums h-6 w-14 rounded bg-slate-900 px-1 text-center text-[11px] font-extrabold text-white outline-none ring-1 ring-amber-400"
+              />
+              <span className="text-[10px] opacity-85">سم</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect(guide.id)
+                setDraftVal(String(guide.distanceCm))
+                setIsEditing(true)
+              }}
+              className="tabular-nums cursor-pointer select-none whitespace-nowrap px-0.5"
+              title="اضغط لتعديل المسافة بالـ سم"
+            >
+              علام: {guide.distanceCm} سم
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(guide.id)
+            }}
+            className={`flex h-4 w-4 items-center justify-center rounded text-[11px] leading-none transition ${
+              isSelected
+                ? 'bg-slate-950/20 text-slate-950 hover:bg-rose-600 hover:text-white'
+                : 'text-rose-300 hover:bg-rose-500/30 hover:text-white'
+            }`}
+            title="حذف هذا العلام"
+            aria-label="حذف العلام"
+          >
+            ×
+          </button>
+        </div>
       </Html>
     </group>
   )
@@ -80,6 +168,8 @@ export function GuideLines3D() {
   const guidesVisible = useDesignStore((s) => s.guidesVisible)
   const selectedGuideId = useDesignStore((s) => s.selectedGuideId)
   const selectGuide = useDesignStore((s) => s.selectGuide)
+  const updateGuideDistance = useDesignStore((s) => s.updateGuideDistance)
+  const deleteGuide = useDesignStore((s) => s.deleteGuide)
   const isExporting = useDesignStore((s) => s.isExporting)
 
   const toolMode = useDesignStore((s) => s.toolMode)
@@ -133,10 +223,12 @@ export function GuideLines3D() {
             guide={guide}
             isSelected={guide.id === selectedGuideId}
             onSelect={selectGuide}
+            onUpdateDistance={updateGuideDistance}
+            onDelete={deleteGuide}
           />
         ))}
 
-      {/* معاينة الحافة المرجعية والخط الإرشادي المباشر أثناء العمل */}
+      {/* معاينة الحافة المرجعية والخط الإرشادي المباشر في وضع السحب من حافة */}
       {toolMode === 'tape' && tapeMode === 'guide' && activeReferenceEdge && previewGuide && (
         <group>
           <Line
@@ -165,10 +257,10 @@ export function GuideLines3D() {
           <Html
             position={previewGuide.labelPosition}
             center
-            distanceFactor={200}
+            distanceFactor={135}
             zIndexRange={[10, 0]}
           >
-            <div className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-lg border border-orange-400 bg-orange-950/95 px-2.5 py-1 text-xs font-extrabold text-orange-100 shadow-lg">
+            <div className="tabular-nums pointer-events-none select-none whitespace-nowrap rounded-md border border-orange-400 bg-orange-950/95 px-2 py-0.5 text-[11px] font-bold text-orange-100 shadow-sm">
               {previewGuide.distanceCm} سم
             </div>
           </Html>

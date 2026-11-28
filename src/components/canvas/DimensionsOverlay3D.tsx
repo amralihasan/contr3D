@@ -21,10 +21,10 @@ function DimensionLine({ start, end, label, color, badgeClassName }: DimensionLi
 
   return (
     <group name="workspace-dimensions-group">
-      <Line points={[start, end]} color={color} lineWidth={1.8} />
-      <Html position={mid} center distanceFactor={210} zIndexRange={[5, 0]}>
+      <Line points={[start, end]} color={color} lineWidth={1.6} />
+      <Html position={mid} center distanceFactor={135} zIndexRange={[5, 0]}>
         <div
-          className={`pointer-events-none select-none whitespace-nowrap rounded-lg border px-2 py-0.5 text-[11px] font-bold shadow-md backdrop-blur-sm tabular-nums ${badgeClassName}`}
+          className={`pointer-events-none select-none whitespace-nowrap rounded-md border px-2 py-0.5 text-[10px] font-bold shadow-sm backdrop-blur-sm tabular-nums ${badgeClassName}`}
         >
           {label}
         </div>
@@ -46,6 +46,8 @@ export function DimensionsOverlay3D() {
     [panels, interfacesHidden]
   )
 
+  const dimensionPlacement = useDesignStore((s) => s.dimensionPlacement)
+
   const overall = useMemo(
     () => (isDraggingGizmo || isExporting ? null : computeOverallDimensions(visiblePanels)),
     [visiblePanels, isDraggingGizmo, isExporting]
@@ -64,13 +66,39 @@ export function DimensionsOverlay3D() {
 
   const offset = 14
   const floorY = 0.6
+  const sameSideHeightDepth = dimensionPlacement.heightSide === dimensionPlacement.depthSide
+  const depthOffset = sameSideHeightDepth ? offset + 14 : offset
+
+  // موضع خط العرض (X)
+  const widthStart: Vec3 =
+    dimensionPlacement.widthSide === 'back'
+      ? [overall.minX, floorY, overall.minZ - offset]
+      : dimensionPlacement.widthSide === 'top'
+        ? [overall.minX, overall.maxY + offset, overall.maxZ]
+        : [overall.minX, floorY, overall.maxZ + offset]
+  const widthEnd: Vec3 =
+    dimensionPlacement.widthSide === 'back'
+      ? [overall.maxX, floorY, overall.minZ - offset]
+      : dimensionPlacement.widthSide === 'top'
+        ? [overall.maxX, overall.maxY + offset, overall.maxZ]
+        : [overall.maxX, floorY, overall.maxZ + offset]
+
+  // موضع خط الارتفاع (Y)
+  const heightX =
+    dimensionPlacement.heightSide === 'left' ? overall.minX - offset : overall.maxX + offset
+
+  // موضع خط العمق (Z) مع إبعاد إضافي عند تشاركه نفس جهة الارتفاع لمنع التداخل
+  const depthX =
+    dimensionPlacement.depthSide === 'left'
+      ? overall.minX - depthOffset
+      : overall.maxX + depthOffset
 
   return (
     <group name="workspace-dimensions-group">
       {/* العرض الكلي (X) */}
       <DimensionLine
-        start={[overall.minX, floorY, overall.maxZ + offset]}
-        end={[overall.maxX, floorY, overall.maxZ + offset]}
+        start={widthStart}
+        end={widthEnd}
         label={`العرض: ${overall.width} سم`}
         color="#38bdf8"
         badgeClassName="border-sky-400/60 bg-slate-950/90 text-sky-200"
@@ -78,8 +106,8 @@ export function DimensionsOverlay3D() {
 
       {/* الارتفاع الكلي (Y) */}
       <DimensionLine
-        start={[overall.maxX + offset, overall.minY, overall.maxZ]}
-        end={[overall.maxX + offset, overall.maxY, overall.maxZ]}
+        start={[heightX, overall.minY, overall.maxZ]}
+        end={[heightX, overall.maxY, overall.maxZ]}
         label={`الارتفاع: ${overall.height} سم`}
         color="#38bdf8"
         badgeClassName="border-sky-400/60 bg-slate-950/90 text-sky-200"
@@ -87,8 +115,8 @@ export function DimensionsOverlay3D() {
 
       {/* العمق الكلي (Z) */}
       <DimensionLine
-        start={[overall.maxX + offset, floorY, overall.minZ]}
-        end={[overall.maxX + offset, floorY, overall.maxZ]}
+        start={[depthX, floorY, overall.minZ]}
+        end={[depthX, floorY, overall.maxZ]}
         label={`العمق: ${overall.depth} سم`}
         color="#38bdf8"
         badgeClassName="border-sky-400/60 bg-slate-950/90 text-sky-200"

@@ -138,8 +138,36 @@ export const HUMAN_SCALE_HEIGHTS_CM: Record<HumanScalePreset, number> = {
   child: 110,
 }
 
+export type HeightDimensionSide = 'left' | 'right'
+export type WidthDimensionSide = 'front' | 'back' | 'top'
+export type DepthDimensionSide = 'right' | 'left'
+
+export interface DimensionPlacement {
+  heightSide: HeightDimensionSide
+  widthSide: WidthDimensionSide
+  depthSide: DepthDimensionSide
+}
+
+export interface TapeMeasureDraft {
+  start: Vec3
+  end: Vec3
+  unitDir: Vec3
+  lockedAxis: Axis | null
+  distanceCm: number
+}
+
 export interface GuideLine {
   id: string
+  /** نوع العلام: من حافة لوح ('edge') أو قياس حر بين نقطتين ('point') */
+  kind?: 'edge' | 'point'
+  /** نقطة البداية للقياس بين نقطتين */
+  measureStart?: Vec3
+  /** نقطة النهاية للقياس بين نقطتين */
+  measureEnd?: Vec3
+  /** متجه الاتجاه للقياس بين نقطتين */
+  unitDir?: Vec3
+  /** المحور المقفل أثناء القياس بين نقطتين */
+  lockedAxis?: Axis | null
   /** اللوح المرجعي الذي أُنشئ العلام بالنسبة له */
   panelId: string
   /** اسم اللوح المرجعي للعرض */
