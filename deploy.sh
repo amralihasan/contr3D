@@ -51,7 +51,8 @@ fi
 START_TS=$(date +%s)
 trap 'rc=$?; [[ $rc -ne 0 ]] && echo "Deploy failed (exit $rc)." >&2' EXIT
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
+# Allow local edits to deploy.sh itself; refuse any other dirty tracked files.
+if git status --porcelain --untracked-files=no | grep -vE ' deploy\.sh$' | grep -q .; then
     echo "Refusing to deploy: tracked files have uncommitted changes." >&2
     git status --short >&2
     exit 1
@@ -71,7 +72,16 @@ fi
 if [[ "$OLD_HEAD" != "$TARGET_HEAD" ]]; then
     echo "==> Updating ${OLD_HEAD:0:7} -> ${TARGET_HEAD:0:7}..."
     git checkout "$BRANCH"
-    git pull --ff-only origin "$BRANCH"
+    # --ff-only aborts when local has unpushed commits and remote moved.
+    # Merge fast-forwards when possible, otherwise creates a merge commit.
+    if git merge-base --is-ancestor HEAD "origin/$BRANCH"; then
+        git merge --ff-only "origin/$BRANCH"
+    elif git merge-base --is-ancestor "origin/$BRANCH" HEAD; then
+        echo "Local HEAD is ahead of origin/$BRANCH; deploying current HEAD."
+    else
+        echo "Branches diverged; merging origin/$BRANCH..."
+        git merge --no-edit "origin/$BRANCH"
+    fi
 fi
 
 NEW_HEAD=$(git rev-parse HEAD)
@@ -92,6 +102,11 @@ npm run build
 if [[ ! -f dist/index.html ]]; then
     echo "Build failed: dist/index.html not found." >&2
     exit 1
+fi
+
+if changed_between '^server/'; then
+    echo "==> Restarting contr3d.service..."
+    systemctl restart contr3d.service
 fi
 
 STATUS=$(curl -sk -o /dev/null -w '%{http_code}' --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/" || echo "000")
