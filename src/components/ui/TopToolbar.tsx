@@ -1,6 +1,7 @@
 import {
   Box,
   Camera,
+  Check,
   ChevronDown,
   ClipboardList,
   Clock,
@@ -14,6 +15,7 @@ import {
   ImageDown,
   Images,
   Layers,
+  Loader2,
   Lock,
   Magnet,
   Maximize2,
@@ -21,6 +23,7 @@ import {
   PictureInPicture2,
   Redo2,
   Ruler,
+  Save,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -32,6 +35,8 @@ import { useDesignStore } from '../../store/useDesignStore'
 
 interface TopToolbarProps {
   onOpenDesignsModal: () => void
+  onQuickSave: () => void
+  quickSaveStatus: 'idle' | 'saving' | 'saved'
   onOpenWorkshopReport: () => void
   onOpenEcommerceExport: () => void
   refImageOpen: boolean
@@ -45,6 +50,8 @@ interface TopToolbarProps {
 
 export function TopToolbar({
   onOpenDesignsModal,
+  onQuickSave,
+  quickSaveStatus,
   onOpenWorkshopReport,
   onOpenEcommerceExport,
   refImageOpen,
@@ -393,6 +400,35 @@ export function TopToolbar({
         >
           <Clock className="h-3.5 w-3.5" />
           <span className="hidden xl:inline">{autoSaveEnabled ? 'تلقائي' : 'يدوي'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onQuickSave}
+          disabled={quickSaveStatus === 'saving'}
+          className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold transition active:scale-[0.98] disabled:opacity-70 ${
+            quickSaveStatus === 'saved'
+              ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
+              : hasUnsavedChanges
+                ? 'border-emerald-500/55 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                : 'border-slate-700/80 bg-slate-800/80 text-slate-200 hover:bg-slate-800'
+          }`}
+          title="حفظ سريع للتعديلات (Ctrl+S / Cmd+S)"
+        >
+          {quickSaveStatus === 'saving' ? (
+            <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
+          ) : quickSaveStatus === 'saved' ? (
+            <Check className="h-4 w-4 text-emerald-300" />
+          ) : (
+            <Save className="h-4 w-4 text-emerald-300" />
+          )}
+          <span className="hidden sm:inline">
+            {quickSaveStatus === 'saving'
+              ? 'جاري الحفظ...'
+              : quickSaveStatus === 'saved'
+                ? 'تم الحفظ'
+                : 'حفظ'}
+          </span>
         </button>
 
         <button

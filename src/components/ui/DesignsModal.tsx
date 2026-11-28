@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Archive,
   Box,
   Check,
   CopyPlus,
@@ -19,6 +20,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useDesignStore } from '../../store/useDesignStore'
 import type { SavedDesignSummary } from '../../types/furniture'
 import {
+  downloadAllDesignsBackup,
   exportProjectToJsonFile,
   parseAndValidateProjectJson,
 } from '../../utils/storage'
@@ -26,14 +28,21 @@ import {
 interface DesignsModalProps {
   open: boolean
   onClose: () => void
+  focusNameOnOpen?: boolean
 }
 
-export function DesignsModal({ open, onClose }: DesignsModalProps) {
+export function DesignsModal({ open, onClose, focusNameOnOpen = false }: DesignsModalProps) {
   if (!open) return null
-  return <DesignsModalContent onClose={onClose} />
+  return <DesignsModalContent onClose={onClose} focusNameOnOpen={focusNameOnOpen} />
 }
 
-function DesignsModalContent({ onClose }: { onClose: () => void }) {
+function DesignsModalContent({
+  onClose,
+  focusNameOnOpen,
+}: {
+  onClose: () => void
+  focusNameOnOpen: boolean
+}) {
   const currentDesignName = useDesignStore((s) => s.currentDesignName)
   const currentDesignId = useDesignStore((s) => s.currentDesignId)
   const hasUnsavedChanges = useDesignStore((s) => s.hasUnsavedChanges)
@@ -56,12 +65,23 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
   const [importError, setImportError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
+  const [downloadingBackup, setDownloadingBackup] = useState(false)
   const [previewDesign, setPreviewDesign] = useState<SavedDesignSummary | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void refreshSavedDesigns()
   }, [refreshSavedDesigns])
+
+  useEffect(() => {
+    if (!focusNameOnOpen) return
+    const timer = setTimeout(() => {
+      nameInputRef.current?.focus()
+      nameInputRef.current?.select()
+    }, 40)
+    return () => clearTimeout(timer)
+  }, [focusNameOnOpen])
 
   const hasSavedMatch = Boolean(
     currentDesignId && savedDesigns.some((d) => d.id === currentDesignId)
@@ -92,6 +112,22 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
   const handleExportJson = () => {
     exportProjectToJsonFile(nameInput || currentDesignName, panels, guides)
     showTempNotice('تم تنزيل ملف المشروع (.json)')
+  }
+
+  const handleDownloadAllBackup = async () => {
+    setImportError(null)
+    clearDesignsError()
+    setDownloadingBackup(true)
+    try {
+      await downloadAllDesignsBackup()
+      showTempNotice('تم تنزيل النسخة الاحتياطية لجميع التصاميم')
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : 'تعذر تنزيل النسخة الاحتياطية من السيرفر.'
+      )
+    } finally {
+      setDownloadingBackup(false)
+    }
   }
 
   const handleImportFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +215,7 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
                 اسم المشروع
               </label>
               <input
+                ref={nameInputRef}
                 id="project-name-input"
                 type="text"
                 value={nameInput}
@@ -250,6 +287,23 @@ function DesignsModalContent({ onClose }: { onClose: () => void }) {
             >
               <Upload className="h-4 w-4 text-emerald-300" />
               <span>استيراد ملف مشروع (.json)</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={downloadingBackup || designsLoading}
+              onClick={() => void handleDownloadAllBackup()}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-3.5 text-xs font-bold text-amber-200 transition hover:bg-amber-500/20 active:scale-[0.98] disabled:opacity-60"
+              title="تنزيل جميع التصاميم المحفوظة على السيرفر في ملف JSON واحد"
+            >
+              {downloadingBackup ? (
+                <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
+              ) : (
+                <Archive className="h-4 w-4 text-amber-300" />
+              )}
+              <span>
+                {downloadingBackup ? 'جاري التجهيز...' : 'نسخة احتياطية للكل'}
+              </span>
             </button>
 
             <input

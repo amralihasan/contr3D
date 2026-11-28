@@ -116,6 +116,56 @@ app.get('/api/designs', async (_req, res) => {
   }
 })
 
+// 1ب. تنزيل نسخة احتياطية كاملة لكل التصاميم والقوالب المخصصة في ملف واحد
+app.get('/api/designs/backup', async (_req, res) => {
+  try {
+    await ensureStorageReady()
+    const entries = await fs.readdir(DESIGNS_DIR, { withFileTypes: true })
+    const designs = []
+
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const safeNameId = sanitizeId(entry.name.slice(0, -5))
+      if (!safeNameId) continue
+      const filePath = getDesignFilePath(safeNameId)
+      if (!filePath) continue
+
+      try {
+        const parsed = await readDesignFile(filePath)
+        if (!parsed || typeof parsed !== 'object') continue
+        designs.push({
+          ...parsed,
+          id: sanitizeId(parsed.id) || safeNameId,
+        })
+      } catch {
+        // تجاهل الملف التالف
+      }
+    }
+
+    designs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    const customTemplates = await readCustomTemplatesList()
+    const dateStr = new Date().toISOString().slice(0, 10)
+
+    const payload = {
+      format: 'contr3d-backup',
+      exportedAt: Date.now(),
+      totalDesigns: designs.length,
+      designs,
+      customTemplates,
+    }
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="designs-backup-${dateStr}.json"`
+    )
+    res.send(JSON.stringify(payload, null, 2))
+  } catch (err) {
+    console.error('Failed to export backup:', err)
+    res.status(500).json({ error: 'تعذر تجهيز النسخة الاحتياطية من السيرفر.' })
+  }
+})
+
 // 2. جلب بيانات تصميم كامل بواسطة ID
 app.get('/api/designs/:id', async (req, res) => {
   const safeId = sanitizeId(req.params.id)

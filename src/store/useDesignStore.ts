@@ -368,6 +368,7 @@ interface DesignState {
   applyCustomTemplate: (templateId: string, mode: 'replace' | 'append') => void
   removeCustomTemplate: (templateId: string) => void
   saveCurrentDesign: (name: string, asNew?: boolean) => Promise<SavedDesign | null>
+  quickSaveCurrentDesign: () => Promise<'saved' | 'needs_name' | 'error'>
   importDesignProject: (data: {
     name: string
     panels: FurniturePanel[]
@@ -2171,6 +2172,15 @@ export const useDesignStore = create<DesignState>((rawSet, get) => {
       })
       return null
     }
+  },
+
+  quickSaveCurrentDesign: async () => {
+    const { currentDesignId, currentDesignName } = get()
+    if (!currentDesignId) {
+      return 'needs_name'
+    }
+    const saved = await get().saveCurrentDesign(currentDesignName, false)
+    return saved ? 'saved' : 'error'
   },
 
   importDesignProject: async (data) => {

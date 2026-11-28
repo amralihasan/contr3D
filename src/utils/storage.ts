@@ -762,6 +762,37 @@ export async function deleteDesignFromServer(id: string): Promise<void> {
   }
 }
 
+export async function downloadAllDesignsBackup(): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch('/api/designs/backup')
+  } catch {
+    throw new Error('تعذر الاتصال بالسيرفر لتنزيل النسخة الاحتياطية، تأكد من تشغيل السيرفر.')
+  }
+
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res, 'تعذر تجهيز النسخة الاحتياطية من السيرفر.'))
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="?([^"]+)"?/i)
+  const fallbackName = `designs-backup-${new Date().toISOString().slice(0, 10)}.json`
+  const filename = match?.[1] || fallbackName
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 200)
+}
+
 function sanitizeCustomTemplateList(rawList: unknown): CustomTemplate[] {
   if (!Array.isArray(rawList)) return []
   const valid: CustomTemplate[] = []

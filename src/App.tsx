@@ -4,7 +4,7 @@ import {
   ChevronRight,
   SlidersHorizontal,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { SceneCanvas } from './components/canvas/SceneCanvas'
 import { ViewportOverlay } from './components/canvas/ViewportOverlay'
 import { AuthGate } from './components/ui/AuthGate'
@@ -30,6 +30,9 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     void useDesignStore.getState().refreshCustomTemplates()
   }, [])
   const [designsModalOpen, setDesignsModalOpen] = useState(false)
+  const [focusNameOnOpen, setFocusNameOnOpen] = useState(false)
+  const [quickSaveStatus, setQuickSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const quickSaveTimerRef = useRef<number | null>(null)
   const [workshopReportOpen, setWorkshopReportOpen] = useState(false)
   const [ecommerceExportOpen, setEcommerceExportOpen] = useState(false)
   const [refImageOpen, setRefImageOpen] = useState(false)
@@ -69,9 +72,58 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
 
   const selectedPanel = panels.find((p) => p.id === selectedPanelId) ?? null
 
-  // اختصارات لوحة المفاتيح (بما فيها Tab لوضع التركيز)
+  useEffect(() => {
+    return () => {
+      if (quickSaveTimerRef.current !== null) {
+        window.clearTimeout(quickSaveTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleQuickSave = useCallback(async () => {
+    const state = useDesignStore.getState()
+    if (!state.currentDesignId) {
+      setFocusNameOnOpen(true)
+      setDesignsModalOpen(true)
+      return
+    }
+    if (quickSaveStatus === 'saving') return
+
+    setQuickSaveStatus('saving')
+    const result = await state.quickSaveCurrentDesign()
+    if (result === 'saved') {
+      setQuickSaveStatus('saved')
+      if (quickSaveTimerRef.current !== null) {
+        window.clearTimeout(quickSaveTimerRef.current)
+      }
+      quickSaveTimerRef.current = window.setTimeout(() => {
+        setQuickSaveStatus('idle')
+        quickSaveTimerRef.current = null
+      }, 2000)
+    } else if (result === 'needs_name') {
+      setQuickSaveStatus('idle')
+      setFocusNameOnOpen(true)
+      setDesignsModalOpen(true)
+    } else {
+      setQuickSaveStatus('idle')
+    }
+  }, [quickSaveStatus])
+
+  // اختصارات لوحة المفاتيح (بما فيها Ctrl+S و Tab لوضع التركيز)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey
+      const code = e.code
+      const key = e.key.toLowerCase()
+
+      if (mod && (code === 'KeyS' || key === 's')) {
+        e.preventDefault()
+        if (!designsModalOpen && !workshopReportOpen && !ecommerceExportOpen) {
+          void handleQuickSave()
+        }
+        return
+      }
+
       const target = e.target as HTMLElement | null
       const isInput =
         target &&
@@ -100,10 +152,6 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
           return
         }
       }
-
-      const mod = e.ctrlKey || e.metaKey
-      const code = e.code
-      const key = e.key.toLowerCase()
 
       if (mod && (code === 'KeyZ' || key === 'z')) {
         e.preventDefault()
@@ -239,6 +287,7 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
     duplicateSelected,
     deleteSelected,
     nudgeSelectedPanels,
+    handleQuickSave,
     deleteGuide,
     selectGuide,
     selectPanel,
@@ -263,7 +312,12 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-slate-950 text-slate-100 print:hidden">
       <TopToolbar
-        onOpenDesignsModal={() => setDesignsModalOpen(true)}
+        onOpenDesignsModal={() => {
+          setFocusNameOnOpen(false)
+          setDesignsModalOpen(true)
+        }}
+        onQuickSave={() => void handleQuickSave()}
+        quickSaveStatus={quickSaveStatus}
         onOpenWorkshopReport={() => setWorkshopReportOpen(true)}
         onOpenEcommerceExport={() => setEcommerceExportOpen(true)}
         refImageOpen={refImageOpen}
@@ -429,7 +483,14 @@ function WorkspaceApp({ onLock }: { onLock: () => void }) {
         )}
       </div>
 
-      <DesignsModal open={designsModalOpen} onClose={() => setDesignsModalOpen(false)} />
+      <DesignsModal
+        open={designsModalOpen}
+        focusNameOnOpen={focusNameOnOpen}
+        onClose={() => {
+          setDesignsModalOpen(false)
+          setFocusNameOnOpen(false)
+        }}
+      />
       <WorkshopReportModal
         open={workshopReportOpen}
         onClose={() => setWorkshopReportOpen(false)}
